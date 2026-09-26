@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AML-алерты: EDA</title>
+<meta name="description" content="Разведочный анализ и ключевые находки: предсказание эскалации AML-алертов по истории транзакций.">
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s1-wash: rgba(42,120,214,0.10); --s2-wash: rgba(235,104,52,0.10);
+  --seq-lo: #cde2fb; --seq-hi: #104281; --accent: #2a78d6; --good: #006300;
+  --code-bg: #f0efec;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s1-wash: rgba(57,135,229,0.14); --s2-wash: rgba(217,89,38,0.14);
+    --seq-lo: #1c2a3d; --seq-hi: #86b6ef; --accent: #3987e5; --good: #0ca30c; --code-bg: #262624;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s1-wash: rgba(57,135,229,0.14); --s2-wash: rgba(217,89,38,0.14);
+  --seq-lo: #1c2a3d; --seq-hi: #86b6ef; --accent: #3987e5; --good: #0ca30c; --code-bg: #262624;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--page); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 80px; }
+header.top { padding: 48px 0 24px; }
+.eyebrow { color: var(--muted); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 8px; }
+h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 0 0 12px; letter-spacing: -.01em; }
+h2 { font-size: 24px; line-height: 1.25; margin: 56px 0 8px; letter-spacing: -.005em; }
+h3 { font-size: 17px; margin: 28px 0 6px; }
+p { margin: 8px 0 12px; max-width: 72ch; }
+.lead { color: var(--ink-2); font-size: 18px; max-width: 68ch; }
+.sec-num { color: var(--muted); font-weight: 500; margin-right: 8px; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin: 16px 0 0; }
+nav.toc a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--border); }
+nav.toc a:hover { color: var(--ink); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 24px 0; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.tile .label { color: var(--ink-2); font-size: 13px; }
+.tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+.tile .sub { color: var(--muted); font-size: 12px; }
+.hero { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+.hero .big { font-size: 56px; font-weight: 600; line-height: 1; }
+.hero .cap { color: var(--ink-2); max-width: 52ch; margin: 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px 8px; margin: 16px 0; }
+.card .ctitle { font-weight: 600; font-size: 15px; margin: 0; }
+.card .csub { color: var(--ink-2); font-size: 13px; margin: 2px 0 8px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin: 4px 0 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.legend i.line { height: 2px; width: 14px; border-radius: 1px; vertical-align: 3px; }
+details { margin: 4px 0 10px; font-size: 13px; color: var(--ink-2); }
+details summary { cursor: pointer; color: var(--muted); }
+table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+th { color: var(--ink-2); font-weight: 600; }
+td.num, th.num { text-align: right; }
+.tablewrap { overflow-x: auto; }
+.callout { border-left: 3px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 12px 12px 0; margin: 16px 0; }
+.callout b { font-weight: 600; }
+ul.clean { padding-left: 20px; max-width: 72ch; }
+ul.clean li { margin: 6px 0; }
+code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 16px 0; counter-reset: st; }
+.flow div { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--ink-2); }
+.flow div b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 2px; }
+.flow div::before { counter-increment: st; content: counter(st); color: var(--muted); font-size: 12px; display: block; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--page); font-size: 12px; line-height: 1.4; padding: 6px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, calc(-100% - 10px)); opacity: 0; transition: opacity .08s; z-index: 5; }
+.tip.on { opacity: 1; }
+.themebtn { position: fixed; top: 12px; right: 12px; background: var(--surface); color: var(--ink-2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font: 13px system-ui, sans-serif; cursor: pointer; z-index: 10; }
+footer { color: var(--muted); font-size: 13px; margin-top: 64px; border-top: 1px solid var(--grid); padding-top: 16px; }
+text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+</style>
+</head>
+<body>
+<button class="themebtn" id="themebtn" type="button" aria-label="Переключить тему">Тема</button>
+<div class="wrap">
+
+<header class="top">
+  <p class="eyebrow">Хакатон по финмониторингу · EDA и ключевые находки</p>
+  <h1>Эскалация AML-алертов: что скрыто в истории транзакций</h1>
+  <p class="lead">Как мы изучали данные, какую закономерность генератора нашли и как она определила модель. Главный вывод: у каждого клиента есть скрытый класс, и его выдают самые маленькие суммы операций.</p>
+  <nav class="toc" aria-label="Содержание">
+    <a href="#approach">Подход</a><a href="#data">Данные</a><a href="#target">Таргет</a><a href="#activity">Активность</a>
+    <a href="#amounts">Суммы</a><a href="#profile">Профиль клиента</a><a href="#floors">Классовые минимумы</a>
+    <a href="#features">Признаки и модель</a><a href="#conclusion">Выводы</a>
+  </nav>
+</header>
+
+<div class="hero">
+  <div class="big" id="hero-auc">0.6643</div>
+  <p class="cap">ROC-AUC на кросс-валидации (OOF, stratified 5-fold × 3 повтора): бленд LightGBM, CatBoost и XGBoost. Базовая модель на обычных агрегатах давала 0.637.</p>
+</div>
+
+<h2 id="approach"><span class="sec-num">1</span>Подход</h2>
+<p>Один алерт — это сотни транзакций за 180 дней. Сначала мы изучили структуру данных и различия между классами, затем проверяли гипотезы о том, как устроен генератор синтетических данных. Каждую идею проверяли на одних и тех же фолдах повторной кросс-валидации: сабмит один, лидерборда нет, так что вся оценка строится на CV.</p>
+<div class="flow">
+  <div><b>EDA транзакций</b>окно истории, всплеск перед сигналом, типы, суммы</div>
+  <div><b>Профиль клиента</b>n, уровень, разброс и минимум сумм по 8 сегментам</div>
+  <div><b>Классовые минимумы</b>операции у порога выдают скрытый класс A или B</div>
+  <div><b>Классификатор класса</b>обучен на якорях без таргета, AUC 0.955</div>
+  <div><b>GBDT-ансамбль</b>LightGBM, CatBoost и XGBoost, бленд по рангам</div>
+</div>
+
+<h2 id="data"><span class="sec-num">2</span>Данные и структура</h2>
+<p>Данные реляционные: таблица алертов (дата и метка) и таблица транзакций, где на один <code>signal_id</code> приходится много строк. Пропусков и дубликатов нет, связей между клиентами нет.</p>
+<div class="tiles" id="kpis"></div>
+<div class="tablewrap"><table>
+  <thead><tr><th>Поле</th><th>Смысл</th><th>Значения</th></tr></thead>
+  <tbody>
+    <tr><td><code>tranzaksiya_vaqti</code></td><td>время транзакции</td><td>ровно 180 дней до даты алерта</td></tr>
+    <tr><td><code>kirim_chiqim</code></td><td>направление</td><td>kirim (приход) 75.6% · chiqim (расход) 24.4%</td></tr>
+    <tr><td><code>tranzaksiya_turi</code></td><td>тип</td><td>karta 53.8% · bank_otkazmasi 39.4% · naqd 6.3% · xalqaro 0.5%</td></tr>
+    <tr><td><code>miqdor_indeksi</code></td><td>стандартизованная сумма</td><td>от −2.91 до 6.69, внутри клиента распределена нормально</td></tr>
+  </tbody>
+</table></div>
+<div class="card">
+  <p class="ctitle">Сегменты: доля транзакций и средний индекс суммы</p>
+  <p class="csub">Сегмент = тип × направление. Уровень сумм сильно зависит от сегмента, поэтому все признаки мы считали внутри сегментов.</p>
+  <div class="grid2"><div class="chart" id="c-seg-share"></div><div class="chart" id="c-seg-mean"></div></div>
+  <details><summary>Таблица</summary><div class="tablewrap" id="t-seg"></div></details>
+</div>
+<p><b>Train и test взяты из одного распределения:</b> классификатор, который пытается отличить train от test, получает AUC 0.500. Даты сигналов в обоих наборах покрывают 2025–2026 годы. Поэтому стратифицированной кросс-валидации можно доверять как оценке скрытого теста.</p>
+
+<h2 id="target"><span class="sec-num">3</span>Таргет</h2>
+<p>Эскалирован <b id="t-rate">17.2%</b> алертов (2 405 из 14 000). По месяцам доля стабильна (14–21%), тренда во времени нет, так что дата сигнала почти не несёт информации.</p>
+<div class="card">
+  <p class="ctitle">Доля эскалаций по месяцам даты сигнала</p>
+  <p class="csub">Train, 24 месяца. Линия — средняя доля.</p>
+  <div class="chart" id="c-monthly"></div>
+  <details><summary>Таблица</summary><div class="tablewrap" id="t-monthly"></div></details>
+</div>
+
+<h2 id="activity"><span class="sec-num">4</span>Активность во времени и перед сигналом</h2>
+<p>История всегда покрывает ровно 180 дней. Активность <b>снижается к дате сигнала</b>: больше половины транзакций приходится на интервал 90–180 дней. На самом деле перед сигналом спрятан пик: <b id="t-burst">7.9%</b> всех транзакций лежат в последних ~3 минутах перед полуночью даты сигнала. Отсюда и «аномальный» 23-й час в распределении по часам.</p>
+<div class="grid2">
+  <div class="card">
+    <p class="ctitle">Транзакции по дням до сигнала</p>
+    <p class="csub">Дни 1–179; день 0 со всплеском показан справа.</p>
+    <div class="chart" id="c-daily"></div>
+  </div>
+  <div class="card">
+    <p class="ctitle">Последние 10 минут перед сигналом</p>
+    <p class="csub">Транзакции по 10-секундным интервалам: почти всё укладывается в 180 секунд.</p>
+    <div class="chart" id="c-burst"></div>
+  </div>
+</div>
+<div class="card">
+  <p class="ctitle">Распределение транзакций по часу суток</p>
+  <p class="csub">Час 23 утроен всплеском перед сигналом, остальные часы равномерны.</p>
+  <div class="chart" id="c-hour"></div>
+</div>
+<p>Всплеск есть и в test, это артефакт генерации, а не выброс. Мы сохранили его и сделали из него отдельные признаки (состав, суммы, доля исходящих). Но у эскалированных и отклонённых алертов он почти не различается, а ритм активности (время суток, выходные, интервалы) классы не разделяет.</p>
+
+<h2 id="amounts"><span class="sec-num">5</span>Суммы: у эскалированных ниже, и дело не в выбросах</h2>
+<p>Доли типов и направлений у двух классов почти совпадают (разница в третьем знаке). Различаются суммы: у эскалированных алертов распределение смещено к меньшим значениям, сильнее всего у банковских переводов.</p>
+<div class="card">
+  <p class="ctitle">Во сколько раз суммы данного размера чаще у эскалированных</p>
+  <p class="csub">Отношение доли транзакций у эскалированных алертов к доле у отклонённых, интервалы 0.2, train. Выше 1 — чаще у эскалированных.</p>
+  <div class="chart" id="c-amt"></div>
+</div>
+<div class="card">
+  <p class="ctitle">Медиана суммы по сегментам</p>
+  <p class="csub">Главный разрыв у банковских переводов: 0.297 против 0.149 для исходящих.</p>
+  <div class="legend"><span><i style="background:var(--s1)"></i>Отклонён</span><span><i style="background:var(--s2)"></i>Эскалирован</span></div>
+  <div class="chart" id="c-segmed"></div>
+</div>
+
+<h2 id="profile"><span class="sec-num">6</span>Профиль клиента: уровень сумм общий для всех сегментов</h2>
+<p>Средние суммы клиента по разным сегментам коррелируют на уровне <b>0.83</b>: у каждого клиента есть свой общий «уровень». Разброс этого уровня между клиентами (std ~0.6) намного больше, чем эффект эскалации (~0.13), поэтому абсолютные суммы — слабый признак. А разность «переводы минус карты» внутри одного клиента убирает этот шум: <b>AUC 0.602</b> у одного признака против 0.572 у лучшего абсолютного.</p>
+<div class="card">
+  <p class="ctitle">Корреляция средних сумм клиента между сегментами</p>
+  <p class="csub">20 000 клиентов. Чем темнее, тем сильнее связь.</p>
+  <div class="chart" id="c-corr"></div>
+</div>
+<p>Сдвиг держится одинаково на всём 180-дневном окне. Это постоянная черта клиента, а не изменение поведения перед алертом. Поэтому признаки мы считаем по всей истории, а не только по последним дням.</p>
+
+<h2 id="floors"><span class="sec-num">7</span>Главная находка: классовые минимумы сумм</h2>
+<p>Следующим шагом добавили к профилю минимум суммы в каждом сегменте. Он дал <b>+0.010 AUC</b>, хотя медиана, квантили и максимум не дали ничего. Второй по величине минимум тоже бесполезен, а значит, дело в самой нижней границе распределения. Разбор привёл к механизму генератора:</p>
+<div class="callout">У каждого клиента есть <b>скрытый класс A или B</b>. У каждого класса в каждом сегменте свой <b>жёсткий минимум суммы</b>; значения ниже минимума «прижаты» в узкую полосу над ним. Поэтому операция в зоне между двумя минимумами <b>однозначно</b> определяет класс клиента.</div>
+<div class="card">
+  <p class="ctitle">Банковские входящие переводы у порога</p>
+  <p class="csub">Число транзакций по интервалам 0.005 от минимума сегмента, для клиентов с известным классом. Классы не пересекаются.</p>
+  <div class="legend"><span><i style="background:var(--s1)"></i>Класс A</span><span><i style="background:var(--s2)"></i>Класс B</span></div>
+  <div class="chart" id="c-floor"></div>
+  <details><summary>Таблица</summary><div class="tablewrap" id="t-floor"></div></details>
+</div>
+<div class="card">
+  <p class="ctitle">Доля эскалаций у транзакций в тех же интервалах</p>
+  <p class="csub">Все train-транзакции. Средняя доля 17%: полоса A даёт ~10%, полоса B ~28%.</p>
+  <div class="chart" id="c-floor-rate"></div>
+</div>
+<div class="grid2">
+  <div>
+    <h3>Минимумы классов по сегментам</h3>
+    <p>Смещение от минимума сегмента. Ноль означает, что класс может опускаться до самого порога.</p>
+    <div class="tablewrap" id="t-classfloor"></div>
+  </div>
+  <div>
+    <h3>Проверка правила</h3>
+    <div class="tiles" id="det-tiles" style="grid-template-columns: repeat(2, 1fr);"></div>
+    <p>Правила по картам совпадают с классом, найденным по банковским переводам, на 100%, хотя это независимые сегменты.</p>
+  </div>
+</div>
+<h3>Класс для остальных 70% клиентов</h3>
+<p>Классы различаются и формой профиля: отношениями разбросов между сегментами и разностями уровней. Мы обучили классификатор «A или B» на якорях (класс из полос банковских переводов, train и test вместе) на признаках, которые <b>не раскрывают</b> банковскую полосу. <b>Метка эскалации здесь не используется.</b> OOF AUC классификатора 0.955.</p>
+<div class="card">
+  <p class="ctitle">Доля эскалаций по вероятности класса B</p>
+  <p class="csub">20 групп train-алертов по предсказанной вероятности класса B: доля выходит на плато ~10% и ~30%, то есть класс бинарный.</p>
+  <div class="chart" id="c-lat"></div>
+  <details><summary>Таблица</summary><div class="tablewrap" id="t-lat"></div></details>
+</div>
+<p>Внутри одного класса сигнал очень слабый (AUC ~0.515). Почти вся предсказательная сила задачи в том, чтобы узнать класс клиента. Если бы класс был известен идеально, это дало бы AUC ≈ 0.66.</p>
+
+<h2 id="features"><span class="sec-num">8</span>Признаки и модель</h2>
+<ul class="clean">
+  <li><b>Профиль по 8 сегментам:</b> число и доля транзакций, mean, std, медиана, q10, q90, <b>min</b>, max.</li>
+  <li><b>Относительные уровни:</b> среднее сегмента минус уровень клиента, попарные разности сегментов, отношения разбросов к картам.</li>
+  <li><b>Скрытый класс:</b> счётчики полос у порога, вероятность класса B, якорная метка.</li>
+  <li><b>Время и потоки:</b> окна 1–180 дней, всплеск перед сигналом, интервалы, net-flow, транзит «вход → выход».</li>
+  <li><b>Гистограммы сумм</b> внутри сегментов по глобальным квантилям.</li>
+</ul>
+<div class="grid2">
+  <div class="card">
+    <p class="ctitle">Как рос CV ROC-AUC</p>
+    <p class="csub">Средний OOF AUC по 3 повторам CV.</p>
+    <div class="chart" id="c-progress"></div>
+  </div>
+  <div class="card">
+    <p class="ctitle">Ablation: убираем группу признаков</p>
+    <p class="csub">До добавления скрытого класса. Профиль и минимумы — основа.</p>
+    <div class="chart" id="c-ablation"></div>
+  </div>
+</div>
+<div class="grid2">
+  <div class="card">
+    <p class="ctitle">Модели на одинаковых фолдах</p>
+    <p class="csub">Фиксированное число итераций, 3 seed'а на фолд.</p>
+    <div class="chart" id="c-models"></div>
+  </div>
+  <div class="card">
+    <p class="ctitle">Топ-15 признаков по gain</p>
+    <p class="csub">LightGBM на всём train, доля суммарного gain.</p>
+    <div class="chart" id="c-imp"></div>
+  </div>
+</div>
+<p><b>Валидация:</b> одинаковые stratified 5-fold × 3 повтора для всех моделей. Число итераций зафиксировано заранее, без ранней остановки на валидационном фолде. Гиперпараметры подобраны через Optuna, и десятки конфигураций сходятся к плато ~0.664, то есть результат устойчив. Тестовый прогноз — среднее рангов 135 фолдовых моделей. Ноутбук воспроизводит сабмит побайтово.</p>
+
+<h2 id="conclusion"><span class="sec-num">9</span>Выводы</h2>
+<ul class="clean">
+  <li>Эскалацию почти полностью определяет <b>скрытый класс клиента</b>: A ≈ 10%, B ≈ 30%.</li>
+  <li>Класс выдают <b>классовые минимумы сумм</b>: одна операция у порога однозначно определяет класс у 6 045 клиентов, противоречий ноль.</li>
+  <li>У остальных клиентов класс восстанавливается по форме профиля (разбросы и разности уровней между сегментами) с AUC 0.955, без использования таргета.</li>
+  <li>Абсолютные суммы, ритм активности и «всплеск» перед сигналом почти не различают классы. Важен <b>профиль относительно самого клиента</b>.</li>
+  <li>Итог: CV ROC-AUC <b>0.6643</b> против 0.637 у бейзлайна. Остаток сигнала внутри классов слабый, так что результат близок к потолку, который допускают данные.</li>
+</ul>
+<footer>Данные синтетические и подготовлены организаторами хакатона. Все графики построены по train (метки) и по транзакциям train + test (без меток). Расчёты: Python, pandas, LightGBM, CatBoost, XGBoost.</footer>
+</div>
+
+<script id="viz-data" type="application/json">{"kpi": {"n_train": 14000, "n_test": 6000, "n_tx": 10015238, "pos": 2405, "rate": 0.1718, "tx_med": 461}, "monthly": [{"m": "2025-01", "rate": 0.1703, "n": 505}, {"m": "2025-02", "rate": 0.1857, "n": 517}, {"m": "2025-03", "rate": 0.1762, "n": 505}, {"m": "2025-04", "rate": 0.2, "n": 470}, {"m": "2025-05", "rate": 0.1652, "n": 466}, {"m": "2025-06", "rate": 0.1429, "n": 497}, {"m": "2025-07", "rate": 0.1635, "n": 746}, {"m": "2025-08", "rate": 0.1701, "n": 735}, {"m": "2025-09", "rate": 0.1394, "n": 696}, {"m": "2025-10", "rate": 0.1717, "n": 856}, {"m": "2025-11", "rate": 0.1544, "n": 790}, {"m": "2025-12", "rate": 0.1752, "n": 805}, {"m": "2026-01", "rate": 0.1643, "n": 767}, {"m": "2026-02", "rate": 0.1605, "n": 704}, {"m": "2026-03", "rate": 0.1992, "n": 778}, {"m": "2026-04", "rate": 0.2122, "n": 608}, {"m": "2026-05", "rate": 0.1701, "n": 635}, {"m": "2026-06", "rate": 0.1435, "n": 634}, {"m": "2026-07", "rate": 0.1756, "n": 427}, {"m": "2026-08", "rate": 0.179, "n": 419}, {"m": "2026-09", "rate": 0.1747, "n": 395}, {"m": "2026-10", "rate": 0.1751, "n": 337}, {"m": "2026-11", "rate": 0.1994, "n": 331}, {"m": "2026-12", "rate": 0.191, "n": 377}], "daily": [{"d": 0, "n": 812005}, {"d": 1, "n": 19824}, {"d": 2, "n": 20281}, {"d": 3, "n": 20803}, {"d": 4, "n": 20980}, {"d": 5, "n": 22211}, {"d": 6, "n": 21987}, {"d": 7, "n": 22363}, {"d": 8, "n": 22891}, {"d": 9, "n": 22989}, {"d": 10, "n": 23660}, {"d": 11, "n": 24440}, {"d": 12, "n": 25022}, {"d": 13, "n": 25158}, {"d": 14, "n": 25551}, {"d": 15, "n": 25788}, {"d": 16, "n": 26649}, {"d": 17, "n": 26989}, {"d": 18, "n": 27668}, {"d": 19, "n": 27893}, {"d": 20, "n": 28477}, {"d": 21, "n": 29127}, {"d": 22, "n": 29301}, {"d": 23, "n": 30295}, {"d": 24, "n": 30667}, {"d": 25, "n": 31012}, {"d": 26, "n": 31601}, {"d": 27, "n": 32049}, {"d": 28, "n": 32596}, {"d": 29, "n": 32868}, {"d": 30, "n": 33483}, {"d": 31, "n": 33836}, {"d": 32, "n": 34309}, {"d": 33, "n": 34810}, {"d": 34, "n": 35486}, {"d": 35, "n": 36141}, {"d": 36, "n": 36521}, {"d": 37, "n": 36842}, {"d": 38, "n": 37592}, {"d": 39, "n": 37852}, {"d": 40, "n": 38394}, {"d": 41, "n": 39130}, {"d": 42, "n": 39619}, {"d": 43, "n": 40147}, {"d": 44, "n": 40892}, {"d": 45, "n": 41256}, {"d": 46, "n": 41912}, {"d": 47, "n": 42107}, {"d": 48, "n": 42509}, {"d": 49, "n": 43001}, {"d": 50, "n": 43539}, {"d": 51, "n": 43484}, {"d": 52, "n": 44817}, {"d": 53, "n": 45404}, {"d": 54, "n": 45660}, {"d": 55, "n": 46256}, {"d": 56, "n": 46794}, {"d": 57, "n": 47198}, {"d": 58, "n": 47533}, {"d": 59, "n": 48070}, {"d": 60, "n": 48397}, {"d": 61, "n": 48591}, {"d": 62, "n": 49238}, {"d": 63, "n": 49494}, {"d": 64, "n": 50523}, {"d": 65, "n": 50633}, {"d": 66, "n": 50792}, {"d": 67, "n": 51301}, {"d": 68, "n": 51960}, {"d": 69, "n": 52081}, {"d": 70, "n": 52691}, {"d": 71, "n": 53073}, {"d": 72, "n": 53701}, {"d": 73, "n": 53947}, {"d": 74, "n": 54169}, {"d": 75, "n": 54303}, {"d": 76, "n": 54746}, {"d": 77, "n": 55217}, {"d": 78, "n": 56437}, {"d": 79, "n": 56511}, {"d": 80, "n": 56349}, {"d": 81, "n": 56611}, {"d": 82, "n": 56985}, {"d": 83, "n": 57707}, {"d": 84, "n": 57833}, {"d": 85, "n": 58495}, {"d": 86, "n": 58028}, {"d": 87, "n": 58959}, {"d": 88, "n": 59027}, {"d": 89, "n": 59266}, {"d": 90, "n": 59217}, {"d": 91, "n": 60120}, {"d": 92, "n": 59973}, {"d": 93, "n": 60050}, {"d": 94, "n": 61086}, {"d": 95, "n": 60381}, {"d": 96, "n": 60964}, {"d": 97, "n": 61527}, {"d": 98, "n": 61580}, {"d": 99, "n": 61311}, {"d": 100, "n": 62046}, {"d": 101, "n": 62132}, {"d": 102, "n": 61970}, {"d": 103, "n": 62433}, {"d": 104, "n": 62868}, {"d": 105, "n": 62720}, {"d": 106, "n": 62598}, {"d": 107, "n": 63115}, {"d": 108, "n": 63348}, {"d": 109, "n": 63474}, {"d": 110, "n": 63411}, {"d": 111, "n": 63330}, {"d": 112, "n": 63517}, {"d": 113, "n": 63900}, {"d": 114, "n": 63377}, {"d": 115, "n": 64050}, {"d": 116, "n": 63706}, {"d": 117, "n": 64333}, {"d": 118, "n": 64631}, {"d": 119, "n": 64145}, {"d": 120, "n": 64754}, {"d": 121, "n": 64326}, {"d": 122, "n": 64008}, {"d": 123, "n": 64457}, {"d": 124, "n": 64553}, {"d": 125, "n": 64531}, {"d": 126, "n": 64556}, {"d": 127, "n": 64867}, {"d": 128, "n": 64459}, {"d": 129, "n": 64819}, {"d": 130, "n": 64140}, {"d": 131, "n": 64461}, {"d": 132, "n": 64961}, {"d": 133, "n": 64218}, {"d": 134, "n": 64518}, {"d": 135, "n": 64282}, {"d": 136, "n": 63866}, {"d": 137, "n": 64282}, {"d": 138, "n": 64337}, {"d": 139, "n": 64234}, {"d": 140, "n": 63687}, {"d": 141, "n": 64256}, {"d": 142, "n": 63576}, {"d": 143, "n": 63690}, {"d": 144, "n": 64192}, {"d": 145, "n": 63588}, {"d": 146, "n": 63686}, {"d": 147, "n": 63113}, {"d": 148, "n": 63315}, {"d": 149, "n": 62793}, {"d": 150, "n": 63353}, {"d": 151, "n": 63148}, {"d": 152, "n": 62688}, {"d": 153, "n": 62654}, {"d": 154, "n": 62211}, {"d": 155, "n": 62022}, {"d": 156, "n": 62389}, {"d": 157, "n": 62100}, {"d": 158, "n": 61572}, {"d": 159, "n": 61535}, {"d": 160, "n": 61239}, {"d": 161, "n": 60961}, {"d": 162, "n": 60876}, {"d": 163, "n": 60395}, {"d": 164, "n": 60332}, {"d": 165, "n": 60199}, {"d": 166, "n": 60287}, {"d": 167, "n": 59796}, {"d": 168, "n": 59834}, {"d": 169, "n": 59096}, {"d": 170, "n": 59340}, {"d": 171, "n": 58855}, {"d": 172, "n": 58741}, {"d": 173, "n": 58483}, {"d": 174, "n": 58542}, {"d": 175, "n": 58053}, {"d": 176, "n": 57595}, {"d": 177, "n": 57603}, {"d": 178, "n": 57076}, {"d": 179, "n": 42730}], "burst": [{"s": 0, "n": 40440}, {"s": 10, "n": 44879}, {"s": 20, "n": 45241}, {"s": 30, "n": 44756}, {"s": 40, "n": 44868}, {"s": 50, "n": 44547}, {"s": 60, "n": 44584}, {"s": 70, "n": 44651}, {"s": 80, "n": 45080}, {"s": 90, "n": 44815}, {"s": 100, "n": 44555}, {"s": 110, "n": 44866}, {"s": 120, "n": 44700}, {"s": 130, "n": 44982}, {"s": 140, "n": 44996}, {"s": 150, "n": 44933}, {"s": 160, "n": 44904}, {"s": 170, "n": 26752}, {"s": 180, "n": 2}, {"s": 190, "n": 0}, {"s": 200, "n": 1}, {"s": 210, "n": 1}, {"s": 220, "n": 3}, {"s": 230, "n": 1}, {"s": 240, "n": 3}, {"s": 250, "n": 4}, {"s": 260, "n": 2}, {"s": 270, "n": 2}, {"s": 280, "n": 5}, {"s": 290, "n": 3}, {"s": 300, "n": 1}, {"s": 310, "n": 1}, {"s": 320, "n": 2}, {"s": 330, "n": 1}, {"s": 340, "n": 4}, {"s": 350, "n": 4}, {"s": 360, "n": 4}, {"s": 370, "n": 1}, {"s": 380, "n": 0}, {"s": 390, "n": 3}, {"s": 400, "n": 0}, {"s": 410, "n": 4}, {"s": 420, "n": 0}, {"s": 430, "n": 1}, {"s": 440, "n": 2}, {"s": 450, "n": 1}, {"s": 460, "n": 4}, {"s": 470, "n": 3}, {"s": 480, "n": 2}, {"s": 490, "n": 1}, {"s": 500, "n": 1}, {"s": 510, "n": 2}, {"s": 520, "n": 5}, {"s": 530, "n": 3}, {"s": 540, "n": 2}, {"s": 550, "n": 0}, {"s": 560, "n": 1}, {"s": 570, "n": 2}, {"s": 580, "n": 1}, {"s": 590, "n": 0}], "burst_share": 0.0789, "hour": [{"h": 0, "p": 0.0389}, {"h": 1, "p": 0.0385}, {"h": 2, "p": 0.0384}, {"h": 3, "p": 0.0385}, {"h": 4, "p": 0.0385}, {"h": 5, "p": 0.0385}, {"h": 6, "p": 0.0384}, {"h": 7, "p": 0.0383}, {"h": 8, "p": 0.0384}, {"h": 9, "p": 0.0384}, {"h": 10, "p": 0.0385}, {"h": 11, "p": 0.0383}, {"h": 12, "p": 0.0384}, {"h": 13, "p": 0.0385}, {"h": 14, "p": 0.0388}, {"h": 15, "p": 0.0383}, {"h": 16, "p": 0.0383}, {"h": 17, "p": 0.0383}, {"h": 18, "p": 0.0382}, {"h": 19, "p": 0.0382}, {"h": 20, "p": 0.0383}, {"h": 21, "p": 0.0383}, {"h": 22, "p": 0.0383}, {"h": 23, "p": 0.1167}], "segs": [{"seg": "karta_in", "n": 4127912, "share": 0.4122, "mean": -0.536, "std": 0.659}, {"seg": "karta_out", "n": 1255874, "share": 0.1254, "mean": -0.072, "std": 0.844}, {"seg": "bank_otkazmasi_in", "n": 2932597, "share": 0.2928, "mean": 0.081, "std": 1.116}, {"seg": "bank_otkazmasi_out", "n": 1019440, "share": 0.1018, "mean": 0.324, "std": 1.156}, {"seg": "naqd_in", "n": 478272, "share": 0.0478, "mean": 0.455, "std": 0.759}, {"seg": "naqd_out", "n": 155596, "share": 0.0155, "mean": 0.791, "std": 0.871}, {"seg": "xalqaro_in", "n": 34916, "share": 0.0035, "mean": 1.939, "std": 1.051}, {"seg": "xalqaro_out", "n": 10631, "share": 0.0011, "mean": 2.168, "std": 1.146}], "amt_hist": [{"x": -2.9, "p0": 0.00169, "p1": 0.00163}, {"x": -2.7, "p0": 0.00112, "p1": 0.00128}, {"x": -2.5, "p0": 0.00158, "p1": 0.00175}, {"x": -2.3, "p0": 0.0026, "p1": 0.00316}, {"x": -2.1, "p0": 0.00801, "p1": 0.00853}, {"x": -1.9, "p0": 0.01033, "p1": 0.01135}, {"x": -1.7, "p0": 0.01698, "p1": 0.01912}, {"x": -1.5, "p0": 0.02757, "p1": 0.03051}, {"x": -1.3, "p0": 0.04184, "p1": 0.04572}, {"x": -1.1, "p0": 0.05931, "p1": 0.06293}, {"x": -0.9, "p0": 0.07545, "p1": 0.07882}, {"x": -0.7, "p0": 0.08683, "p1": 0.08896}, {"x": -0.5, "p0": 0.09203, "p1": 0.09379}, {"x": -0.3, "p0": 0.09027, "p1": 0.09042}, {"x": -0.1, "p0": 0.08368, "p1": 0.08316}, {"x": 0.1, "p0": 0.07445, "p1": 0.07336}, {"x": 0.3, "p0": 0.06415, "p1": 0.06247}, {"x": 0.5, "p0": 0.05385, "p1": 0.05243}, {"x": 0.7, "p0": 0.04496, "p1": 0.04315}, {"x": 0.9, "p0": 0.03675, "p1": 0.03486}, {"x": 1.1, "p0": 0.02974, "p1": 0.02793}, {"x": 1.3, "p0": 0.02368, "p1": 0.02197}, {"x": 1.5, "p0": 0.01853, "p1": 0.01683}, {"x": 1.7, "p0": 0.01422, "p1": 0.01248}, {"x": 1.9, "p0": 0.01079, "p1": 0.00936}, {"x": 2.1, "p0": 0.00814, "p1": 0.00692}, {"x": 2.3, "p0": 0.00601, "p1": 0.00499}, {"x": 2.5, "p0": 0.00438, "p1": 0.00371}, {"x": 2.7, "p0": 0.00321, "p1": 0.00253}, {"x": 2.9, "p0": 0.00231, "p1": 0.0018}, {"x": 3.1, "p0": 0.00166, "p1": 0.00125}, {"x": 3.3, "p0": 0.00117, "p1": 0.00091}, {"x": 3.5, "p0": 0.00084, "p1": 0.00063}, {"x": 3.7, "p0": 0.00061, "p1": 0.00041}, {"x": 3.9, "p0": 0.00042, "p1": 0.00032}, {"x": 4.1, "p0": 0.00031, "p1": 0.00022}, {"x": 4.3, "p0": 0.0002, "p1": 0.00014}, {"x": 4.5, "p0": 0.00014, "p1": 9e-05}, {"x": 4.7, "p0": 0.0001, "p1": 5e-05}, {"x": 4.9, "p0": 7e-05, "p1": 5e-05}], "seg_med_by_y": [{"seg": "karta_in", "m0": -0.567, "m1": -0.603}, {"seg": "karta_out", "m0": -0.121, "m1": -0.128}, {"seg": "bank_otkazmasi_in", "m0": 0.06, "m1": -0.049}, {"seg": "bank_otkazmasi_out", "m0": 0.297, "m1": 0.149}, {"seg": "naqd_in", "m0": 0.395, "m1": 0.403}, {"seg": "naqd_out", "m0": 0.76, "m1": 0.72}], "corr": {"labels": ["karta_in", "karta_out", "bank_otkazmasi_in", "bank_otkazmasi_out", "naqd_in", "naqd_out"], "m": [[1.0, 0.84, 0.84, 0.76, 0.72, 0.65], [0.84, 1.0, 0.73, 0.73, 0.66, 0.63], [0.84, 0.73, 1.0, 0.88, 0.75, 0.68], [0.76, 0.73, 0.88, 1.0, 0.67, 0.68], [0.72, 0.66, 0.75, 0.67, 1.0, 0.71], [0.65, 0.63, 0.68, 0.68, 0.71, 1.0]]}, "floor_bank_in": [{"x": 0.0, "n": 2545, "A": 2545, "B": 0, "rate": 0.089}, {"x": 0.005, "n": 2572, "A": 2572, "B": 0, "rate": 0.111}, {"x": 0.01, "n": 2105, "A": 2105, "B": 0, "rate": 0.106}, {"x": 0.015, "n": 662, "A": 78, "B": 421, "rate": 0.254}, {"x": 0.02, "n": 1348, "A": 75, "B": 938, "rate": 0.293}, {"x": 0.025, "n": 1315, "A": 50, "B": 940, "rate": 0.273}, {"x": 0.03, "n": 1415, "A": 66, "B": 976, "rate": 0.318}, {"x": 0.035, "n": 331, "A": 60, "B": 191, "rate": 0.284}, {"x": 0.04, "n": 146, "A": 71, "B": 40, "rate": 0.194}, {"x": 0.045, "n": 143, "A": 67, "B": 35, "rate": 0.162}, {"x": 0.05, "n": 142, "A": 63, "B": 46, "rate": 0.21}, {"x": 0.055, "n": 170, "A": 81, "B": 46, "rate": 0.226}, {"x": 0.06, "n": 170, "A": 84, "B": 48, "rate": 0.138}, {"x": 0.065, "n": 159, "A": 73, "B": 47, "rate": 0.163}, {"x": 0.07, "n": 114, "A": 47, "B": 38, "rate": 0.154}, {"x": 0.075, "n": 184, "A": 79, "B": 51, "rate": 0.262}, {"x": 0.08, "n": 177, "A": 81, "B": 57, "rate": 0.18}, {"x": 0.085, "n": 157, "A": 75, "B": 44, "rate": 0.2}, {"x": 0.09, "n": 151, "A": 78, "B": 35, "rate": 0.184}, {"x": 0.095, "n": 172, "A": 76, "B": 48, "rate": 0.187}], "floor_karta_out": [{"x": 0.0, "n": 213, "A": 0, "B": 213, "rate": 0.225}, {"x": 0.01, "n": 211, "A": 0, "B": 211, "rate": 0.343}, {"x": 0.02, "n": 218, "A": 0, "B": 218, "rate": 0.352}, {"x": 0.03, "n": 236, "A": 0, "B": 236, "rate": 0.338}, {"x": 0.04, "n": 200, "A": 0, "B": 200, "rate": 0.299}, {"x": 0.05, "n": 235, "A": 0, "B": 235, "rate": 0.287}, {"x": 0.06, "n": 228, "A": 0, "B": 228, "rate": 0.336}, {"x": 0.07, "n": 225, "A": 0, "B": 225, "rate": 0.284}, {"x": 0.08, "n": 228, "A": 0, "B": 228, "rate": 0.253}, {"x": 0.09, "n": 288, "A": 0, "B": 288, "rate": 0.289}, {"x": 0.1, "n": 276, "A": 0, "B": 276, "rate": 0.267}, {"x": 0.11, "n": 294, "A": 0, "B": 294, "rate": 0.328}, {"x": 0.12, "n": 338, "A": 0, "B": 338, "rate": 0.339}, {"x": 0.13, "n": 281, "A": 0, "B": 281, "rate": 0.328}, {"x": 0.14, "n": 454, "A": 135, "B": 214, "rate": 0.196}, {"x": 0.15, "n": 505, "A": 187, "B": 215, "rate": 0.216}, {"x": 0.16, "n": 417, "A": 224, "B": 79, "rate": 0.172}, {"x": 0.17, "n": 430, "A": 216, "B": 82, "rate": 0.151}, {"x": 0.18, "n": 396, "A": 202, "B": 82, "rate": 0.184}, {"x": 0.19, "n": 451, "A": 230, "B": 101, "rate": 0.166}, {"x": 0.2, "n": 467, "A": 240, "B": 83, "rate": 0.159}, {"x": 0.21, "n": 441, "A": 213, "B": 95, "rate": 0.157}, {"x": 0.22, "n": 478, "A": 247, "B": 93, "rate": 0.138}, {"x": 0.23, "n": 506, "A": 255, "B": 117, "rate": 0.204}, {"x": 0.24, "n": 551, "A": 290, "B": 118, "rate": 0.154}, {"x": 0.25, "n": 532, "A": 271, "B": 115, "rate": 0.157}, {"x": 0.26, "n": 530, "A": 285, "B": 111, "rate": 0.136}, {"x": 0.27, "n": 552, "A": 301, "B": 106, "rate": 0.155}, {"x": 0.28, "n": 558, "A": 273, "B": 113, "rate": 0.158}, {"x": 0.29, "n": 535, "A": 299, "B": 93, "rate": 0.156}], "class_floor": [{"seg": "karta_in", "A": 0.0357, "B": 0.0}, {"seg": "karta_out", "A": 0.1431, "B": 0.0}, {"seg": "bank_otkazmasi_in", "A": 0.0, "B": 0.0178}, {"seg": "bank_otkazmasi_out", "A": 0.0, "B": 0.0318}, {"seg": "naqd_in", "A": 0.0, "B": 0.0407}, {"seg": "naqd_out", "A": 0.0, "B": 0.1276}, {"seg": "xalqaro_in", "A": 0.0, "B": 0.0995}, {"seg": "xalqaro_out", "A": 0.4545, "B": 0.0}], "det": {"nA": 3694, "nB": 2351, "conf": 0, "rateA": 0.102, "rateB": 0.306, "rateU": 0.168, "nU": 13955}, "lat_curve": [{"p": 0.009, "rate": 0.103, "n": 700}, {"p": 0.021, "rate": 0.109, "n": 700}, {"p": 0.033, "rate": 0.11, "n": 700}, {"p": 0.045, "rate": 0.09, "n": 700}, {"p": 0.062, "rate": 0.091, "n": 700}, {"p": 0.081, "rate": 0.101, "n": 700}, {"p": 0.106, "rate": 0.11, "n": 700}, {"p": 0.135, "rate": 0.11, "n": 700}, {"p": 0.176, "rate": 0.101, "n": 700}, {"p": 0.233, "rate": 0.104, "n": 700}, {"p": 0.308, "rate": 0.123, "n": 700}, {"p": 0.414, "rate": 0.137, "n": 700}, {"p": 0.547, "rate": 0.174, "n": 700}, {"p": 0.691, "rate": 0.226, "n": 700}, {"p": 0.829, "rate": 0.249, "n": 700}, {"p": 0.918, "rate": 0.3, "n": 700}, {"p": 0.964, "rate": 0.289, "n": 700}, {"p": 0.985, "rate": 0.306, "n": 700}, {"p": 0.995, "rate": 0.299, "n": 700}, {"p": 0.999, "rate": 0.304, "n": 700}], "progress": [{"k": "Бейзлайн: 140 агрегатов", "v": 0.637}, {"k": "+ профиль по 8 сегментам", "v": 0.6447}, {"k": "+ минимумы сегментов", "v": 0.6555}, {"k": "+ скрытый класс", "v": 0.6648}, {"k": "Честно: фикс. итерации + тюнинг", "v": 0.6641}, {"k": "Бленд LGB + Cat + XGB", "v": 0.6643}], "models": [{"k": "Бленд (ранги)", "v": 0.6643}, {"k": "CatBoost", "v": 0.6642}, {"k": "LightGBM", "v": 0.6641}, {"k": "XGBoost", "v": 0.6631}, {"k": "LightGBM DART", "v": 0.6615}, {"k": "Логистическая регрессия", "v": 0.6461}], "ablation": [{"k": "все признаки", "v": 0.6555}, {"k": "без потоков", "v": 0.6551}, {"k": "без гистограмм", "v": 0.6549}, {"k": "без времени", "v": 0.6547}, {"k": "без минимумов", "v": 0.6447}, {"k": "без профиля", "v": 0.6225}], "imp": [{"k": "lat_comb", "v": 0.3492}, {"k": "lat_p", "v": 0.1921}, {"k": "d_bank_otkazmasi_out__naqd_in", "v": 0.0415}, {"k": "d_bank_otkazmasi_in__naqd_in", "v": 0.0364}, {"k": "d_karta_out__bank_otkazmasi_out", "v": 0.0267}, {"k": "lat_anchor", "v": 0.0163}, {"k": "bank_minus_card", "v": 0.0113}, {"k": "burst_out", "v": 0.0098}, {"k": "std_naqd_out", "v": 0.0063}, {"k": "rel_lvl_nonbank_bank_otkazmasi_out", "v": 0.0061}, {"k": "cf_w120", "v": 0.0057}, {"k": "h_naqd_out_6", "v": 0.0047}, {"k": "rel_lvl_card_bank_otkazmasi_in", "v": 0.0047}, {"k": "std_bank_otkazmasi_in", "v": 0.0045}, {"k": "d_bank_otkazmasi_out__naqd_out", "v": 0.0045}]}</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("viz-data").textContent);
+  const NS = 'http://www.w3.org/2000/svg';
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const fmt = (v, d = 3) => (v == null ? '—' : Number(v).toFixed(d));
+  const pct = (v, d = 1) => (v * 100).toFixed(d) + '%';
+  const nf = new Intl.NumberFormat('ru-RU');
+
+  // theme toggle
+  const btn = document.getElementById('themebtn');
+  btn.addEventListener('click', () => {
+    const cur = document.documentElement.getAttribute('data-theme');
+    const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+    renderAll();
+  });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+
+  function el(tag, attrs, parent) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function tipFor(host) {
+    let t = host.querySelector('.tip');
+    if (!t) { t = document.createElement('div'); t.className = 'tip'; host.appendChild(t); }
+    return t;
+  }
+  function bindTip(host, node, html, getXY) {
+    const t = tipFor(host);
+    const show = ev => {
+      const r = host.getBoundingClientRect();
+      const [x, y] = getXY ? getXY(r) : [ev.clientX - r.left, ev.clientY - r.top];
+      t.innerHTML = html; t.style.left = Math.min(Math.max(x, 60), r.width - 60) + 'px'; t.style.top = y + 'px'; t.classList.add('on');
+    };
+    node.addEventListener('mousemove', show); node.addEventListener('mouseenter', show);
+    node.addEventListener('mouseleave', () => t.classList.remove('on'));
+    node.addEventListener('touchstart', e => { show(e.touches[0]); }, { passive: true });
+  }
+  // rounded-top bar path (vertical) anchored to baseline
+  function vbar(x, y0, w, y1, r) {
+    const top = Math.min(y0, y1), h = Math.abs(y0 - y1); r = Math.min(r, w / 2, h);
+    if (h <= 0) return '';
+    if (y1 <= y0) return `M${x},${y0}V${top + r}Q${x},${top} ${x + r},${top}H${x + w - r}Q${x + w},${top} ${x + w},${top + r}V${y0}Z`;
+    const bot = y1; return `M${x},${y0}V${bot - r}Q${x},${bot} ${x + r},${bot}H${x + w - r}Q${x + w},${bot} ${x + w},${bot - r}V${y0}Z`;
+  }
+  function hbar(x0, y, h, x1, r) {
+    const w = Math.abs(x1 - x0); r = Math.min(r, h / 2, w); if (w <= 0) return '';
+    if (x1 >= x0) return `M${x0},${y}H${x1 - r}Q${x1},${y} ${x1},${y + r}V${y + h - r}Q${x1},${y + h} ${x1 - r},${y + h}H${x0}Z`;
+    return `M${x0},${y}H${x1 + r}Q${x1},${y} ${x1},${y + r}V${y + h - r}Q${x1},${y + h} ${x1 + r},${y + h}H${x0}Z`;
+  }
+  function niceTicks(lo, hi, n) {
+    const span = hi - lo, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+    const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => span / s <= n) || 10 * mag;
+    const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+    return out;
+  }
+
+  // ---------- vertical columns (1 or 2 series side by side), optional reference line ----------
+  function columns(id, rows, o) {
+    const host = document.getElementById(id); host.querySelectorAll('svg').forEach(s => s.remove());
+    const W = host.clientWidth || 600, H = o.h || 220, m = { l: 44, r: 12, t: 10, b: o.xlabelH || 28 };
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': o.aria || '' }, host);
+    const keys = o.keys, cols = o.colors || ['--s1', '--s2'];
+    const ymax = o.ymax || Math.max(...rows.flatMap(r => keys.map(k => r[k] || 0))) * 1.08;
+    const ymin = o.ymin || 0;
+    const iw = W - m.l - m.r, ih = H - m.t - m.b, band = iw / rows.length;
+    const y = v => m.t + ih - (v - ymin) / (ymax - ymin) * ih;
+    niceTicks(ymin, ymax, 4).forEach(v => {
+      el('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: css('--grid'), 'stroke-width': 1 }, svg);
+      const t = el('text', { x: m.l - 6, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: css('--muted') }, svg); t.textContent = o.yfmt ? o.yfmt(v) : v;
+    });
+    const gap = keys.length > 1 ? 2 : 0; let lastLab = -1e9;
+    const bw = Math.max(1, Math.min(24, (band - (o.pad != null ? o.pad : 2)) / keys.length - gap));
+    rows.forEach((r, i) => {
+      const cx = m.l + band * i + band / 2, gw = bw * keys.length + gap * (keys.length - 1);
+      keys.forEach((k, j) => {
+        if (r[k] == null) return;
+        const x = cx - gw / 2 + j * (bw + gap);
+        el('path', { d: vbar(x, y(ymin), bw, y(r[k]), Math.min(4, bw / 2)), fill: css(cols[j]) }, svg);
+      });
+      const hit = el('rect', { x: m.l + band * i, y: m.t, width: band, height: ih, fill: 'transparent' }, svg);
+      bindTip(host, hit, o.tip(r));
+      const lab = o.xlab && o.xlab(r, i);
+      if (lab) {
+        const parts = String(lab).split('\n'), wlab = Math.max(...parts.map(s => s.length)) * 6.2 + 10;
+        if (o.allLabels || cx - lastLab >= wlab) {
+          const t = el('text', { x: cx, y: H - m.b + 16, 'text-anchor': 'middle', 'font-size': 11, fill: css('--muted') }, svg);
+          parts.forEach((s, k) => { const ts = el('tspan', { x: cx, dy: k ? 13 : 0 }, t); ts.textContent = s; });
+          lastLab = cx;
+        }
+      }
+    });
+    el('line', { x1: m.l, x2: W - m.r, y1: y(ymin), y2: y(ymin), stroke: css('--axis'), 'stroke-width': 1 }, svg);
+    if (o.ref != null) {
+      el('line', { x1: m.l, x2: W - m.r, y1: y(o.ref), y2: y(o.ref), stroke: css('--ink-2'), 'stroke-width': 1.5 }, svg);
+      const t = el('text', { x: W - m.r, y: y(o.ref) - 6, 'text-anchor': 'end', 'font-size': 11, fill: css('--ink-2'), stroke: css('--surface'), 'stroke-width': 4, 'paint-order': 'stroke', 'stroke-linejoin': 'round' }, svg); t.textContent = o.refLabel;
+    }
+  }
+
+  // ---------- horizontal bars (single series) ----------
+  function hbars(id, rows, o) {
+    const host = document.getElementById(id); host.querySelectorAll('svg').forEach(s => s.remove());
+    const W = host.clientWidth || 400, rowH = o.rowH || 26, lw = o.labelW || 150, m = { l: lw, r: 56, t: 4, b: 4 };
+    const H = m.t + m.b + rows.length * rowH;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': o.aria || '' }, host);
+    const lo = o.lo != null ? o.lo : Math.min(0, ...rows.map(r => r.v)), hi = o.hi != null ? o.hi : Math.max(0, ...rows.map(r => r.v));
+    const iw = W - m.l - m.r, x = v => m.l + (v - lo) / (hi - lo) * iw, x0 = x(o.base != null ? o.base : Math.max(lo, 0));
+    rows.forEach((r, i) => {
+      const yy = m.t + i * rowH, bh = Math.min(18, rowH - 8), by = yy + (rowH - bh) / 2;
+      const lab = el('text', { x: m.l - 8, y: yy + rowH / 2 + 4, 'text-anchor': 'end', 'font-size': 12, fill: css('--ink-2') }, svg); lab.textContent = r.k;
+      el('path', { d: hbar(x0, by, bh, x(r.v), 4), fill: css(r.color || o.color || '--s1') }, svg);
+      const pos = r.v >= (o.base != null ? o.base : 0);
+      const vt = el('text', { x: pos ? x(r.v) + 6 : x0 + 6, y: yy + rowH / 2 + 4, 'text-anchor': 'start', 'font-size': 12, fill: css('--ink'), 'font-variant-numeric': 'tabular-nums' }, svg);
+      vt.textContent = o.vfmt ? o.vfmt(r.v) : r.v;
+      const hit = el('rect', { x: 0, y: yy, width: W, height: rowH, fill: 'transparent' }, svg);
+      bindTip(host, hit, o.tip ? o.tip(r) : `${r.k}: ${o.vfmt ? o.vfmt(r.v) : r.v}`);
+    });
+    el('line', { x1: x0, x2: x0, y1: m.t, y2: H - m.b, stroke: css('--axis'), 'stroke-width': 1 }, svg);
+  }
+
+  // ---------- lines (1–2 series) with crosshair ----------
+  function lines(id, rows, o) {
+    const host = document.getElementById(id); host.querySelectorAll('svg').forEach(s => s.remove());
+    const W = host.clientWidth || 600, H = o.h || 240, m = { l: 48, r: 16, t: 12, b: 30 };
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': o.aria || '' }, host);
+    const xs = rows.map(r => r[o.x]), xmin = o.xmin != null ? o.xmin : Math.min(...xs), xmax = o.xmax != null ? o.xmax : Math.max(...xs);
+    const ymax = o.ymax || Math.max(...rows.flatMap(r => o.keys.map(k => r[k]))) * 1.08, ymin = o.ymin || 0;
+    const iw = W - m.l - m.r, ih = H - m.t - m.b;
+    const x = v => m.l + (v - xmin) / (xmax - xmin) * iw, y = v => m.t + ih - (v - ymin) / (ymax - ymin) * ih;
+    niceTicks(ymin, ymax, 4).forEach(v => {
+      el('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: css('--grid'), 'stroke-width': 1 }, svg);
+      const t = el('text', { x: m.l - 6, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: css('--muted') }, svg); t.textContent = o.yfmt ? o.yfmt(v) : v;
+    });
+    (o.xticks || niceTicks(xmin, xmax, 6)).forEach(v => {
+      const t = el('text', { x: x(v), y: H - 10, 'text-anchor': 'middle', 'font-size': 11, fill: css('--muted') }, svg); t.textContent = o.xfmt ? o.xfmt(v) : v;
+    });
+    el('line', { x1: m.l, x2: W - m.r, y1: y(ymin), y2: y(ymin), stroke: css('--axis'), 'stroke-width': 1 }, svg);
+    (o.refs || []).forEach(rf => {
+      el('line', { x1: m.l, x2: W - m.r, y1: y(rf.v), y2: y(rf.v), stroke: css('--ink-2'), 'stroke-width': 1, 'stroke-opacity': 0.6 }, svg);
+      const t = el('text', { x: m.l + 6, y: y(rf.v) - 6, 'font-size': 11, fill: css('--ink-2'), stroke: css('--surface'), 'stroke-width': 4, 'paint-order': 'stroke', 'stroke-linejoin': 'round' }, svg); t.textContent = rf.label;
+    });
+    const cols = o.colors || ['--s1', '--s2'];
+    o.keys.forEach((k, j) => {
+      const d = rows.map((r, i) => (i ? 'L' : 'M') + x(r[o.x]).toFixed(1) + ',' + y(r[k]).toFixed(1)).join('');
+      if (o.area) el('path', { d: d + `L${x(rows[rows.length - 1][o.x])},${y(ymin)}L${x(rows[0][o.x])},${y(ymin)}Z`, fill: css(j ? '--s2-wash' : '--s1-wash') }, svg);
+      el('path', { d, fill: 'none', stroke: css(cols[j]), 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
+      if (o.dots) rows.forEach(r => el('circle', { cx: x(r[o.x]), cy: y(r[k]), r: 4, fill: css(cols[j]), stroke: css('--surface'), 'stroke-width': 2 }, svg));
+    });
+    const cross = el('line', { y1: m.t, y2: m.t + ih, stroke: css('--axis'), 'stroke-width': 1, opacity: 0 }, svg);
+    const t = tipFor(host);
+    const hit = el('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' }, svg);
+    const move = ev => {
+      const r = host.getBoundingClientRect(), sx = (ev.clientX - r.left) * (W / r.width);
+      let best = 0, bd = 1e9; rows.forEach((row, i) => { const dd = Math.abs(x(row[o.x]) - sx); if (dd < bd) { bd = dd; best = i; } });
+      const row = rows[best], px = x(row[o.x]);
+      cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('opacity', 1);
+      t.innerHTML = o.tip(row); t.style.left = Math.min(Math.max(px * r.width / W, 70), r.width - 70) + 'px'; t.style.top = (m.t + 10) + 'px'; t.classList.add('on');
+    };
+    hit.addEventListener('mousemove', move); hit.addEventListener('touchstart', e => move(e.touches[0]), { passive: true });
+    hit.addEventListener('mouseleave', () => { cross.setAttribute('opacity', 0); t.classList.remove('on'); });
+  }
+
+  // ---------- heatmap ----------
+  function heatmap(id, labels, M) {
+    const host = document.getElementById(id); host.querySelectorAll('svg').forEach(s => s.remove());
+    const W = Math.min(host.clientWidth || 560, 620), lw = 128, cell = (W - lw) / labels.length, H = lw * 0.2 + cell * labels.length + 8;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Корреляция средних сумм по сегментам' }, host);
+    svg.style.maxWidth = W + 'px';
+    const lo = css('--seq-lo'), hi = css('--seq-hi');
+    const mix = (a, b, t) => { const p = c => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)); const A = p(a), B = p(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`; };
+    labels.forEach((lab, i) => {
+      const t = el('text', { x: lw - 8, y: 4 + cell * i + cell / 2 + 4, 'text-anchor': 'end', 'font-size': 11, fill: css('--ink-2') }, svg); t.textContent = lab;
+      labels.forEach((lab2, j) => {
+        const v = M[i][j], tt = Math.max(0, Math.min(1, (v - 0.5) / 0.5));
+        const r = el('rect', { x: lw + cell * j + 1, y: 4 + cell * i + 1, width: cell - 2, height: cell - 2, rx: 3, fill: mix(lo, hi, tt) }, svg);
+        const txt = el('text', { x: lw + cell * j + cell / 2, y: 4 + cell * i + cell / 2 + 4, 'text-anchor': 'middle', 'font-size': 11, fill: tt > 0.55 ? (css('--surface') === '#1a1a19' ? '#0b0b0b' : '#ffffff') : css('--ink') }, svg);
+        txt.textContent = v.toFixed(2);
+        bindTip(host, r, `${lab} × ${lab2}: ${v.toFixed(2)}`);
+      });
+    });
+  }
+
+  function table(id, head, rows) {
+    const h = document.getElementById(id); if (!h) return;
+    h.innerHTML = '<table><thead><tr>' + head.map(c => `<th class="${c.num ? 'num' : ''}">${c.t}</th>`).join('') + '</tr></thead><tbody>' +
+      rows.map(r => '<tr>' + r.map((v, i) => `<td class="${head[i].num ? 'num' : ''}">${v}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
+  }
+
+  // ---------- static tables & tiles ----------
+  const K = D.kpi;
+  document.getElementById('kpis').innerHTML = [
+    ['Алертов в train', nf.format(K.n_train), 'с меткой эскалации'],
+    ['Алертов в test', nf.format(K.n_test), 'скрытые метки'],
+    ['Транзакций', (K.n_tx / 1e6).toFixed(1).replace('.', ',') + ' млн', 'train + test'],
+    ['Медиана на алерт', nf.format(K.tx_med), 'транзакций за 180 дней'],
+    ['Доля эскалаций', pct(K.rate), nf.format(K.pos) + ' алертов'],
+  ].map(([l, v, s]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join('');
+  document.getElementById('t-rate').textContent = pct(K.rate);
+  document.getElementById('t-burst').textContent = pct(D.burst_share);
+  table('t-seg', [{ t: 'Сегмент' }, { t: 'Транзакций', num: 1 }, { t: 'Доля', num: 1 }, { t: 'Средний индекс', num: 1 }, { t: 'Std', num: 1 }],
+    D.segs.map(s => [s.seg, nf.format(s.n), pct(s.share, 2), fmt(s.mean), fmt(s.std)]));
+  table('t-monthly', [{ t: 'Месяц' }, { t: 'Алертов', num: 1 }, { t: 'Доля эскалаций', num: 1 }], D.monthly.map(r => [r.m, r.n, pct(r.rate)]));
+  table('t-floor', [{ t: 'Смещение от порога' }, { t: 'Класс A', num: 1 }, { t: 'Класс B', num: 1 }, { t: 'Доля эскалаций', num: 1 }],
+    D.floor_bank_in.map(r => [fmt(r.x, 3), r.A, r.B, r.rate == null ? '—' : pct(r.rate)]));
+  table('t-classfloor', [{ t: 'Сегмент' }, { t: 'Минимум A', num: 1 }, { t: 'Минимум B', num: 1 }],
+    D.class_floor.map(r => [r.seg, '+' + r.A.toFixed(3), '+' + r.B.toFixed(3)]));
+  table('t-lat', [{ t: 'Группа' }, { t: 'Средняя P(B)', num: 1 }, { t: 'Доля эскалаций', num: 1 }, { t: 'Алертов', num: 1 }],
+    D.lat_curve.map((r, i) => [i + 1, fmt(r.p), pct(r.rate), r.n]));
+  const dt = D.det;
+  document.getElementById('det-tiles').innerHTML = [
+    ['Класс A по правилу', nf.format(dt.nA), 'эскалаций ' + pct(dt.rateA)],
+    ['Класс B по правилу', nf.format(dt.nB), 'эскалаций ' + pct(dt.rateB)],
+    ['Противоречий', String(dt.conf), 'улики A и B сразу'],
+    ['Не определён', nf.format(dt.nU), 'эскалаций ' + pct(dt.rateU)],
+  ].map(([l, v, s]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join('');
+
+  // ---------- charts ----------
+  function renderAll() {
+    hbars('c-seg-share', D.segs.map(s => ({ k: s.seg, v: s.share })), { vfmt: v => pct(v), aria: 'Доля транзакций по сегментам', labelW: 128 });
+    hbars('c-seg-mean', D.segs.map(s => ({ k: s.seg, v: s.mean })), { vfmt: v => v.toFixed(2), aria: 'Средний индекс суммы', labelW: 128, lo: -0.8, hi: 2.4 });
+    columns('c-monthly', D.monthly, { keys: ['rate'], ymax: 0.25, yfmt: v => Math.round(v * 100) + '%', ref: K.rate, refLabel: 'в среднем ' + pct(K.rate),
+      tip: r => `${r.m}: <b>${pct(r.rate)}</b> · ${r.n} алертов`, xlab: (r, i) => (i % 3 === 0 ? r.m.slice(2) : ''), aria: 'Доля эскалаций по месяцам' });
+    columns('c-daily', D.daily.filter(r => r.d > 0), { keys: ['n'], pad: 0.5, yfmt: v => (v / 1000) + 'k', tip: r => `${r.d} дн. до сигнала: <b>${nf.format(r.n)}</b>`,
+      xlab: (r, i) => (r.d % 30 === 0 ? r.d : ''), aria: 'Транзакции по дням до сигнала' });
+    columns('c-burst', D.burst, { keys: ['n'], pad: 1, yfmt: v => (v / 1000) + 'k', tip: r => `${r.s}–${r.s + 10} с до сигнала: <b>${nf.format(r.n)}</b>`,
+      xlab: (r, i) => (r.s % 60 === 0 ? r.s + 'с' : ''), aria: 'Транзакции в последние 10 минут' });
+    columns('c-hour', D.hour, { keys: ['p'], h: 180, yfmt: v => Math.round(v * 100) + '%', tip: r => `${r.h}:00: <b>${pct(r.p)}</b>`, xlab: r => (r.h % 3 === 0 ? r.h : ''), aria: 'По часу суток' });
+    const ratio = D.amt_hist.filter(r => r.x > -2.7 && r.x < 4.1).map(r => Object.assign({ r: r.p1 / r.p0 }, r));
+    lines('c-amt', ratio, { x: 'x', keys: ['r'], dots: true, ymin: 0.6, ymax: 1.3, xmin: -2.6, xmax: 4, yfmt: v => v.toFixed(1),
+      refs: [{ v: 1, label: 'нет различия' }],
+      tip: r => `индекс ${r.x.toFixed(1)}: отношение <b>${r.r.toFixed(2)}</b> · отклонён ${pct(r.p0, 2)} · эскалирован ${pct(r.p1, 2)}`, aria: 'Отношение долей по классу' });
+    columns('c-segmed', D.seg_med_by_y, { keys: ['m0', 'm1'], ymin: -0.8, ymax: 0.9, h: 230, pad: 20, yfmt: v => v.toFixed(1),
+      tip: r => `${r.seg}: отклонён <b>${fmt(r.m0)}</b> · эскалирован <b>${fmt(r.m1)}</b>`, xlab: r => r.seg.replace('bank_otkazmasi', 'bank').replace('_', '\n'), allLabels: true, xlabelH: 42, aria: 'Медианы по сегментам' });
+    heatmap('c-corr', D.corr.labels, D.corr.m);
+    columns('c-floor', D.floor_bank_in, { keys: ['A', 'B'], pad: 2, yfmt: v => nf.format(v), tip: r => `+${r.x.toFixed(3)}: класс A <b>${r.A}</b> · класс B <b>${r.B}</b>`,
+      xlab: (r, i) => (i % 4 === 0 ? '+' + r.x.toFixed(2) : ''), aria: 'Транзакции у порога по классам' });
+    columns('c-floor-rate', D.floor_bank_in, { keys: ['rate'], ymax: 0.4, h: 180, pad: 2, yfmt: v => Math.round(v * 100) + '%', ref: K.rate, refLabel: 'средняя ' + pct(K.rate),
+      tip: r => `+${r.x.toFixed(3)}: <b>${r.rate == null ? '—' : pct(r.rate)}</b> · ${r.n} транзакций`, xlab: (r, i) => (i % 4 === 0 ? '+' + r.x.toFixed(2) : ''), aria: 'Доля эскалаций у порога' });
+    lines('c-lat', D.lat_curve.map((r, i) => Object.assign({ i: i + 1 }, r)), { x: 'i', keys: ['rate'], dots: true, ymax: 0.36, xmin: 1, xmax: 20, xticks: [1, 5, 10, 15, 20],
+      yfmt: v => Math.round(v * 100) + '%', xfmt: v => v, refs: [{ v: dt.rateA, label: 'класс A ' + pct(dt.rateA) }, { v: dt.rateB, label: 'класс B ' + pct(dt.rateB) }],
+      tip: r => `группа ${r.i}: P(B)≈${fmt(r.p, 2)} · эскалаций <b>${pct(r.rate)}</b>`, aria: 'Эскалации по вероятности класса B' });
+    hbars('c-progress', D.progress.map(r => ({ k: r.k, v: r.v })), { lo: 0.62, hi: 0.67, base: 0.62, vfmt: v => v.toFixed(4), labelW: 196, rowH: 30, aria: 'Рост CV AUC' });
+    hbars('c-ablation', D.ablation.map(r => ({ k: r.k, v: r.v })), { lo: 0.60, hi: 0.66, base: 0.60, vfmt: v => v.toFixed(4), labelW: 120, rowH: 30, aria: 'Ablation' });
+    hbars('c-models', D.models.map(r => ({ k: r.k, v: r.v })), { lo: 0.63, hi: 0.667, base: 0.63, vfmt: v => v.toFixed(4), labelW: 170, rowH: 30, aria: 'Сравнение моделей' });
+    hbars('c-imp', D.imp.map(r => ({ k: r.k, v: r.v })), { lo: 0, vfmt: v => pct(v), labelW: 190, rowH: 22, aria: 'Важность признаков' });
+  }
+  renderAll();
+  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderAll, 120); });
+})();
+</script>
+</body>
+</html>

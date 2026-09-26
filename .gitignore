@@ -1,0 +1,9 @@
+fintech_data/
+cache/
+catboost_info/
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
+*.pyc
+baseline_features.py
+ТЗ.md
