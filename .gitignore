@@ -1,6 +1,7 @@
-fintech_data/
+fintech_data
 cache/
 catboost_info/
+.venv/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store

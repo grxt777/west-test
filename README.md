@@ -43,7 +43,21 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/jupyter nbconvert --to notebook --execute solution.ipynb --output solution.ipynb
 ```
 
-Данные должны лежать в `fintech_data/` рядом с ноутбуком.
+Для локального запуска данные должны лежать рядом с проектом в `fintech_data/`.
+Если файл уже лежит в `~/Downloads/fintech_data`, удобно сделать символическую ссылку:
+
+```bash
+ln -s ~/Downloads/fintech_data ./fintech_data
+```
+
+Для предварительного просмотра сайта из корня проекта:
+
+```bash
+cd /Users/kaxramonjonusmonov/west-test
+python3 -m http.server 8000
+```
+
+После этого открыть `http://localhost:8000/docs/` или `http://localhost:8000/docs/index.html`.
 
 ## Публикация сайта (GitHub Pages)
 
