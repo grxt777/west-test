@@ -161,32 +161,35 @@ main section { padding-top: 104px; scroll-margin-top: 50px; }
 .step.rule .node { border-color: var(--s1); color: var(--s1); }
 .step h4 { margin: 8px 0 2px; font-size: 15px; letter-spacing: -0.01em; }
 .step .sub { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
-.step details { margin: 12px 0 4px; }
-.step details p { font-size: 13px; line-height: 1.5; margin: 8px 0 2px; }
+.step .more { margin: 12px 0 4px; }
+.morebody { display: none; font-size: 13px; line-height: 1.5; margin: 8px 0 2px; color: var(--ink-2); }
+.step.pop .morebody { display: block; animation: fadeUp .35s var(--ease) both; }
 .step.rule { --acc: var(--s1); --acc-wash: var(--s1-wash); }
 .step.learn { --acc: var(--s2); --acc-wash: var(--s2-wash); }
 .step.pop { z-index: 6; }
 
 details { margin: 6px 0 10px; font-size: 13px; color: var(--ink-2); }
-details summary { cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px 6px 13px; border-radius: 999px;
+details summary, .morebtn { cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px 6px 13px; border-radius: 999px;
   font: 500 13px var(--sans); color: var(--ink); background: var(--surface-2); border: 1px solid var(--border-2); transition: border-color .2s, background .2s, color .2s; }
 details summary::-webkit-details-marker { display: none; }
-details summary::after { content: ""; width: 6px; height: 6px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .25s var(--ease); }
-details summary:hover { border-color: var(--acc, var(--s1)); color: var(--acc, var(--s1)); }
-details summary:focus-visible { outline: 2px solid var(--acc, var(--s1)); outline-offset: 2px; }
-details[open] summary { color: var(--acc, var(--s1)); border-color: var(--acc, var(--s1)); background: var(--acc-wash, var(--s1-wash)); }
-details[open] summary::after { transform: translateY(1px) rotate(-135deg); }
+details summary::after, .morebtn::after { content: ""; width: 6px; height: 6px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .25s var(--ease); }
+details summary:hover, .morebtn:hover { border-color: var(--acc, var(--s1)); color: var(--acc, var(--s1)); }
+details summary:focus-visible, .morebtn:focus-visible { outline: 2px solid var(--acc, var(--s1)); outline-offset: 2px; }
+details[open] summary, .step.pop .morebtn { color: var(--acc, var(--s1)); border-color: var(--acc, var(--s1)); background: var(--acc-wash, var(--s1-wash)); }
+details[open] summary::after, .step.pop .morebtn::after { transform: translateY(1px) rotate(-135deg); }
 details[open] > *:not(summary) { animation: fadeUp .35s var(--ease) both; }
 @media (min-width: 1001px) {
   .step { display: flex; flex-direction: column; }
   .step .tag { align-self: flex-start; }
-  .step details { margin-top: auto; padding-top: 12px; }
-  .step details summary { padding: 5px 10px 5px 11px; font-size: 12.5px; }
-  .step details p { position: absolute; top: calc(100% + 8px); left: 0; width: max(100%, 250px); margin: 0; padding: 12px 14px; z-index: 6;
-    background: var(--surface); color: var(--ink-2); border: 1px solid var(--acc, var(--border-2)); border-radius: 12px; box-shadow: 0 24px 50px -20px rgba(0,0,0,.6); }
-  .step details p::before { content: ""; position: absolute; top: -6px; left: 22px; width: 10px; height: 10px; background: var(--surface); border-left: 1px solid var(--acc, var(--border-2)); border-top: 1px solid var(--acc, var(--border-2)); transform: rotate(45deg); }
-  .pipe .step:nth-last-child(-n+2) details p { left: auto; right: 0; }
-  .pipe .step:nth-last-child(-n+2) details p::before { left: auto; right: 22px; }
+  .step .more { margin-top: auto; padding-top: 12px; }
+  .step .morebtn { padding: 5px 10px 5px 11px; font-size: 12.5px; }
+  .morebody, .step.pop .morebody { display: block; position: absolute; top: calc(100% + 8px); left: 0; width: max(100%, 250px); margin: 0; padding: 12px 14px; z-index: 6;
+    background: var(--surface); color: var(--ink-2); border: 1px solid var(--acc, var(--border-2)); border-radius: 12px; box-shadow: 0 24px 50px -20px rgba(0,0,0,.6);
+    visibility: hidden; opacity: 0; transform: translateY(6px); pointer-events: none; animation: none; transition: none; }
+  .step.pop .morebody { visibility: visible; opacity: 1; transform: none; pointer-events: auto; transition: opacity .2s var(--ease), transform .2s var(--ease); }
+  .morebody::before { content: ""; position: absolute; top: -6px; left: 22px; width: 10px; height: 10px; background: var(--surface); border-left: 1px solid var(--acc, var(--border-2)); border-top: 1px solid var(--acc, var(--border-2)); transform: rotate(45deg); }
+  .pipe .step:nth-last-child(-n+2) .morebody { left: auto; right: 0; }
+  .pipe .step:nth-last-child(-n+2) .morebody::before { left: auto; right: 22px; }
 }
 
 table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; font-variant-numeric: tabular-nums; }
@@ -443,19 +446,19 @@ footer .mono { font-weight: 600; color: var(--ink-2); }
   <div class="legendtags reveal"><span><span class="tag rule">Правило</span> геометрия сумм, без обучения</span><span><span class="tag learn">Обучение</span> обучаемая модель</span></div>
   <ol class="pipe">
     <li class="step io reveal"><div class="node">01</div><span class="tag io">Вход</span><h4>Транзакции</h4><div class="sub">180 дней · медиана 461 на алерт</div>
-      <details><summary>Подробнее</summary><p>Train и test вместе: 10 млн операций. Метка эскалации есть только у train.</p></details></li>
+      <div class="more"><button type="button" class="morebtn" aria-expanded="false">Подробнее</button><p class="morebody">Train и test вместе: 10 млн операций. Метка эскалации есть только у train.</p></div></li>
     <li class="step rule reveal"><div class="node">02</div><span class="tag rule">Правило</span><h4>8 сегментов</h4><div class="sub">тип × направление</div>
-      <details><summary>Подробнее</summary><p>Уровень сумм сильно зависит от типа операции, поэтому все признаки считаются внутри сегментов.</p></details></li>
+      <div class="more"><button type="button" class="morebtn" aria-expanded="false">Подробнее</button><p class="morebody">Уровень сумм сильно зависит от типа операции, поэтому все признаки считаются внутри сегментов.</p></div></li>
     <li class="step rule reveal"><div class="node">03</div><span class="tag rule">Правило</span><h4>Профиль клиента</h4><div class="sub">уровень, разброс, минимум</div>
-      <details><summary>Подробнее</summary><p>n, доли, mean, std, квантили, min и max по сегментам, плюс уровни относительно самого клиента.</p></details></li>
+      <div class="more"><button type="button" class="morebtn" aria-expanded="false">Подробнее</button><p class="morebody">n, доли, mean, std, квантили, min и max по сегментам, плюс уровни относительно самого клиента.</p></div></li>
     <li class="step rule reveal"><div class="node">04</div><span class="tag rule">Правило</span><h4>Классовые минимумы</h4><div class="sub">операции у порога</div>
-      <details><summary>Подробнее</summary><p>Одна транзакция между минимумами двух классов однозначно выдаёт класс клиента.</p></details></li>
+      <div class="more"><button type="button" class="morebtn" aria-expanded="false">Подробнее</button><p class="morebody">Одна транзакция между минимумами двух классов однозначно выдаёт класс клиента.</p></div></li>
     <li class="step learn reveal"><div class="node">05</div><span class="tag learn">Обучение</span><h4>Классификатор A/B</h4><div class="sub">5 738 якорей, AUC 0.955</div>
-      <details><summary>Подробнее</summary><p>LightGBM по форме профиля, без признаков, раскрывающих банковскую полосу, и без таргета.</p></details></li>
+      <div class="more"><button type="button" class="morebtn" aria-expanded="false">Подробнее</button><p class="morebody">LightGBM по форме профиля, без признаков, раскрывающих банковскую полосу, и без таргета.</p></div></li>
     <li class="step learn reveal"><div class="node">06</div><span class="tag learn">Обучение</span><h4>GBDT-ансамбль</h4><div class="sub">LightGBM · CatBoost · XGBoost</div>
-      <details><summary>Подробнее</summary><p>Одинаковые фолды 5 × 3, 3 seed'а на фолд, фиксированное число итераций.</p></details></li>
+      <div class="more"><button type="button" class="morebtn" aria-expanded="false">Подробнее</button><p class="morebody">Одинаковые фолды 5 × 3, 3 seed'а на фолд, фиксированное число итераций.</p></div></li>
     <li class="step io reveal"><div class="node">07</div><span class="tag io">Выход</span><h4>Вероятность</h4><div class="sub">бленд рангов → [0, 1]</div>
-      <details><summary>Подробнее</summary><p>Каждая модель усредняет 45 фолдовых прогнозов, затем берётся среднее рангов трёх моделей, нормированное в [0, 1].</p></details></li>
+      <div class="more"><button type="button" class="morebtn" aria-expanded="false">Подробнее</button><p class="morebody">Каждая модель усредняет 45 фолдовых прогнозов, затем берётся среднее рангов трёх моделей, нормированное в [0, 1].</p></div></li>
   </ol>
 </section>
 
@@ -1073,16 +1076,19 @@ footer .mono { font-weight: 600; color: var(--ink-2); }
   const setMenu = open => { nav.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); };
   menuBtn.addEventListener('click', e => { e.stopPropagation(); setMenu(!nav.classList.contains('open')); });
   links.forEach(a => a.addEventListener('click', () => setMenu(false)));
-  const stepDetails = [...document.querySelectorAll('.pipe details')];
-  stepDetails.forEach(d => d.addEventListener('toggle', () => {
-    d.closest('.step').classList.toggle('pop', d.open);
-    if (d.open) stepDetails.forEach(o => { if (o !== d) o.open = false; });
+  const moreBtns = [...document.querySelectorAll('.pipe .morebtn')];
+  const setStep = (btn, open) => { btn.closest('.step').classList.toggle('pop', open); btn.setAttribute('aria-expanded', String(open)); };
+  const closeSteps = () => moreBtns.forEach(b => setStep(b, false));
+  moreBtns.forEach(b => b.addEventListener('click', () => {
+    const open = b.getAttribute('aria-expanded') !== 'true';
+    closeSteps();
+    setStep(b, open);
   }));
   document.addEventListener('click', e => {
     if (!nav.contains(e.target)) setMenu(false);
-    if (!e.target.closest('.pipe details')) stepDetails.forEach(d => { d.open = false; });
+    if (!e.target.closest('.pipe .more')) closeSteps();
   });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { setMenu(false); stepDetails.forEach(d => { d.open = false; }); } });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { setMenu(false); closeSteps(); } });
   if ('IntersectionObserver' in window) {
     const spy = new IntersectionObserver(es => es.forEach(e => {
       if (!e.isIntersecting) return;
