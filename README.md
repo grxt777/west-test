@@ -38,7 +38,7 @@
 ## Структура
 
 ```
-fintech_data/          исходные данные организаторов
+fintech_data/          исходные данные организаторов (не в репозитории, кладутся локально)
 solution.ipynb         финальное воспроизводимое решение (самодостаточный)
 build_notebook.py      генерирует solution.ipynb (единый источник кода)
 requirements.txt       точные версии библиотек
@@ -58,7 +58,9 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/jupyter nbconvert --to notebook --execute solution.ipynb --output solution.ipynb
 ```
 
-Данные уже лежат в `fintech_data/` рядом с ноутбуком: после `git clone` ноутбук запускается сразу.
+Данные организаторов в репозиторий не выкладываются (по условиям хакатона в публичном GitHub только
+агрегаты и картинки). Перед запуском положите файлы в `fintech_data/` рядом с ноутбуком:
+`train_signals.csv`, `test_signals.csv`, `train_transactions.parquet`, `test_transactions.parquet`.
 
 Предпросмотр сайта локально (из корня репозитория):
 
