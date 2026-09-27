@@ -1,295 +1,685 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AML-алерты: EDA</title>
-<meta name="description" content="Разведочный анализ и ключевые находки: предсказание эскалации AML-алертов по истории транзакций.">
+<title>AML-алерты: EDA и скрытый класс клиента</title>
+<meta name="description" content="Разведочный анализ и ключевые находки: предсказание эскалации AML-алертов по истории транзакций. CV ROC-AUC 0.6643.">
+<script>
+  document.documentElement.classList.add('js');
+  try { var th = localStorage.getItem('aml-theme'); if (th === 'light' || th === 'dark') document.documentElement.setAttribute('data-theme', th); } catch (e) {}
+</script>
 <style>
+@property --ang { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
 :root {
-  color-scheme: light;
-  --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
-  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
-  --s1: #2a78d6; --s2: #eb6834; --s1-wash: rgba(42,120,214,0.10); --s2-wash: rgba(235,104,52,0.10);
-  --seq-lo: #cde2fb; --seq-hi: #104281; --accent: #2a78d6; --good: #006300;
-  --code-bg: #f0efec;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
-    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-    --s1: #3987e5; --s2: #d95926; --s1-wash: rgba(57,135,229,0.14); --s2-wash: rgba(217,89,38,0.14);
-    --seq-lo: #1c2a3d; --seq-hi: #86b6ef; --accent: #3987e5; --good: #0ca30c; --code-bg: #262624;
-  }
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --grad: linear-gradient(90deg, var(--s1), var(--vi), var(--s2));
+  --r: 16px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
-  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
-  --s1: #3987e5; --s2: #d95926; --s1-wash: rgba(57,135,229,0.14); --s2-wash: rgba(217,89,38,0.14);
-  --seq-lo: #1c2a3d; --seq-hi: #86b6ef; --accent: #3987e5; --good: #0ca30c; --code-bg: #262624;
+  --page: #06070b; --surface: #0e1016; --surface-2: #151823; --ink: #f3f4f7; --ink-2: #b3b8c5; --muted: #767c8b;
+  --grid: #1c2030; --axis: #2d3345; --border: rgba(255,255,255,0.08); --border-2: rgba(255,255,255,0.18);
+  --s1: #4d8dff; --s2: #ff7a45; --vi: #a07cff; --s1-wash: rgba(77,141,255,0.14); --s2-wash: rgba(255,122,69,0.14);
+  --seq-lo: #121c33; --seq-hi: #8fb8ff; --glow: rgba(77,141,255,0.35); --code-bg: #1a1d28; --nav-bg: rgba(6,7,11,0.72);
+  --blob: 0.32;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #f6f6f3; --surface: #ffffff; --surface-2: #efefeb; --ink: #0b0b0c; --ink-2: #4b4b48; --muted: #86847e;
+  --grid: #e6e5de; --axis: #c8c7bc; --border: rgba(11,11,11,0.09); --border-2: rgba(11,11,11,0.2);
+  --s1: #2a78d6; --s2: #eb6834; --vi: #7c5cff; --s1-wash: rgba(42,120,214,0.10); --s2-wash: rgba(235,104,52,0.10);
+  --seq-lo: #dbe8fb; --seq-hi: #104281; --glow: rgba(42,120,214,0.22); --code-bg: #efeee9; --nav-bg: rgba(246,246,243,0.78);
+  --blob: 0.16;
 }
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 html, body { margin: 0; }
-body { background: var(--page); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-.wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 80px; }
-header.top { padding: 48px 0 24px; }
-.eyebrow { color: var(--muted); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; margin: 0 0 8px; }
-h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 0 0 12px; letter-spacing: -.01em; }
-h2 { font-size: 24px; line-height: 1.25; margin: 56px 0 8px; letter-spacing: -.005em; }
-h3 { font-size: 17px; margin: 28px 0 6px; }
-p { margin: 8px 0 12px; max-width: 72ch; }
-.lead { color: var(--ink-2); font-size: 18px; max-width: 68ch; }
-.sec-num { color: var(--muted); font-weight: 500; margin-right: 8px; }
-nav.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 14px; margin: 16px 0 0; }
-nav.toc a { color: var(--ink-2); text-decoration: none; border-bottom: 1px solid var(--border); }
-nav.toc a:hover { color: var(--ink); }
-.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 24px 0; }
-.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+body { background: var(--page); color: var(--ink); font: 16px/1.65 var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; transition: background .4s, color .4s; }
+a { color: inherit; }
+::selection { background: var(--s1); color: #fff; }
+code { font: 13px/1.4 var(--mono); background: var(--code-bg); padding: 1px 6px; border-radius: 5px; }
+.wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+p { margin: 8px 0 14px; max-width: 72ch; color: var(--ink-2); }
+p b, li b { color: var(--ink); font-weight: 600; }
+h2 { font-size: clamp(28px, 4vw, 44px); line-height: 1.1; letter-spacing: -0.025em; margin: 6px 0 16px; max-width: 24ch; font-weight: 700; }
+h3 { font-size: 18px; letter-spacing: -0.01em; margin: 26px 0 6px; }
+.grad-text { background: var(--grad); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shine 7s linear infinite; }
+@keyframes shine { to { background-position: 200% center; } }
+
+/* ---------- progress + nav ---------- */
+.progress { position: fixed; top: 0; left: 0; right: 0; height: 2px; background: var(--grad); transform: scaleX(0); transform-origin: left; z-index: 60; }
+.topnav { position: fixed; top: 0; left: 0; right: 0; height: 60px; z-index: 50; display: flex; align-items: center; gap: 18px; padding: 0 20px;
+  background: var(--nav-bg); -webkit-backdrop-filter: blur(14px) saturate(1.4); backdrop-filter: blur(14px) saturate(1.4); border-bottom: 1px solid transparent; transition: border-color .3s; }
+.topnav.scrolled { border-bottom-color: var(--border); }
+.logo { font: 700 13px var(--mono); letter-spacing: .12em; text-decoration: none; white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+.logo i { width: 10px; height: 10px; border-radius: 50%; background: var(--grad); box-shadow: 0 0 14px var(--glow); }
+.logo span { color: var(--muted); }
+.nav-links { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(90deg, transparent, #000 18px, #000 calc(100% - 18px), transparent); }
+.nav-links a:first-child { margin-left: auto; }
+.nav-links a:last-child { margin-right: auto; }
+.nav-links::-webkit-scrollbar { display: none; }
+.nav-links a { font-size: 13px; color: var(--ink-2); text-decoration: none; padding: 6px 10px; border-radius: 999px; white-space: nowrap; transition: color .2s, background .2s; }
+.nav-links a:hover { color: var(--ink); }
+.nav-links a.active { color: var(--ink); background: var(--surface-2); }
+.themebtn { background: var(--surface); color: var(--ink-2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font: 12px var(--mono); letter-spacing: .06em; cursor: pointer; white-space: nowrap; transition: border-color .2s, color .2s; }
+.themebtn:hover { color: var(--ink); border-color: var(--border-2); }
+
+/* ---------- hero ---------- */
+.hero { position: relative; min-height: 94vh; display: flex; align-items: center; overflow: hidden; border-bottom: 1px solid var(--border); }
+.hero::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 56px 56px; -webkit-mask-image: radial-gradient(ellipse at 62% 45%, #000 15%, transparent 72%); mask-image: radial-gradient(ellipse at 62% 45%, #000 15%, transparent 72%); opacity: .7; }
+.blob { position: absolute; border-radius: 50%; filter: blur(90px); opacity: var(--blob); animation: float 18s ease-in-out infinite alternate; pointer-events: none; }
+.blob.b1 { width: 520px; height: 520px; background: var(--s1); top: -160px; right: 6%; }
+.blob.b2 { width: 460px; height: 460px; background: var(--s2); bottom: -200px; right: 30%; animation-delay: -6s; }
+.blob.b3 { width: 360px; height: 360px; background: var(--vi); top: 30%; left: -140px; animation-delay: -11s; }
+@keyframes float { 0% { transform: translate(0, 0) scale(1); } 50% { transform: translate(40px, 30px) scale(1.08); } 100% { transform: translate(-30px, -20px) scale(.95); } }
+#particles { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hero-inner { position: relative; z-index: 2; max-width: 1120px; margin: 0 auto; padding: 130px 20px 90px; width: 100%; }
+.eyebrow { font: 600 12px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0 0 14px; }
+.eyebrow b { color: var(--s1); font-weight: 600; }
+.hero h1 { font-size: clamp(40px, 7.2vw, 88px); line-height: 1.02; letter-spacing: -0.035em; margin: 0 0 22px; font-weight: 750; max-width: 14ch; }
+.hero h1 .ln { display: block; overflow: hidden; }
+.hero h1 .ln > span { display: inline-block; animation: rise 1s var(--ease) both; }
+.hero h1 .ln:nth-child(2) > span { animation-delay: .15s; }
+.hero .lead { font-size: clamp(16px, 1.6vw, 19px); max-width: 56ch; color: var(--ink-2); animation: fadeUp 1s .35s var(--ease) both; }
+@keyframes rise { from { transform: translateY(105%); } to { transform: none; } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+.ctas { display: flex; gap: 12px; flex-wrap: wrap; margin: 28px 0 26px; animation: fadeUp 1s .5s var(--ease) both; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 20px; border-radius: 999px; font: 600 14px var(--sans); text-decoration: none; cursor: pointer; transition: transform .25s var(--ease), box-shadow .25s; }
+.btn.primary { background: var(--grad); background-size: 160% auto; color: #fff; box-shadow: 0 10px 30px -12px var(--glow); }
+.btn.primary:hover { transform: translateY(-2px); box-shadow: 0 16px 40px -12px var(--glow); background-position: right center; }
+.btn.ghost { border: 1px solid transparent; background: linear-gradient(var(--page), var(--page)) padding-box, var(--grad) border-box; color: var(--ink); }
+.btn.ghost:hover { transform: translateY(-2px); }
+.btn .arr { transition: transform .25s var(--ease); }
+.btn:hover .arr { transform: translateX(4px); }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; animation: fadeUp 1s .65s var(--ease) both; }
+.chip { font: 600 11px var(--mono); letter-spacing: .1em; color: var(--ink-2); padding: 6px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+.chip b { color: var(--ink); }
+.scrollhint { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 2; font: 11px var(--mono); letter-spacing: .2em; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.scrollhint i { width: 1px; height: 34px; background: linear-gradient(var(--muted), transparent); animation: drip 2s ease-in-out infinite; }
+@keyframes drip { 0% { transform: scaleY(0); transform-origin: top; } 50% { transform: scaleY(1); transform-origin: top; } 51% { transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+
+/* ---------- sections ---------- */
+main section { padding-top: 104px; scroll-margin-top: 50px; }
+.sh { margin-bottom: 18px; }
+.num { color: var(--s1); }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; margin-top: -54px; position: relative; z-index: 3; }
+.kpi { background: var(--surface); padding: 22px 22px 20px; }
+.kv { font-size: clamp(30px, 4.2vw, 50px); font-weight: 700; letter-spacing: -0.03em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.kl { font-weight: 600; margin-top: 8px; font-size: 15px; }
+.ks { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); padding: 20px 20px 12px; margin: 18px 0; transition: border-color .3s, box-shadow .3s; }
+.card:hover { border-color: var(--border-2); box-shadow: 0 24px 60px -36px var(--glow); }
+.ctitle { font-weight: 650; font-size: 16px; margin: 0; color: var(--ink); }
+.csub { color: var(--muted); font-size: 13px; margin: 3px 0 10px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.grid2 > .card, .grid3 > .card { margin: 0; }
+.grid2 + .grid2, .card + .grid2, .grid2 + .card { margin-top: 18px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 22px 0; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
 .tile .label { color: var(--ink-2); font-size: 13px; }
-.tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+.tile .value { font-size: 26px; font-weight: 700; margin-top: 2px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .tile .sub { color: var(--muted); font-size: 12px; }
-.hero { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
-.hero .big { font-size: 56px; font-weight: 600; line-height: 1; }
-.hero .cap { color: var(--ink-2); max-width: 52ch; margin: 0; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 16px 8px; margin: 16px 0; }
-.card .ctitle { font-weight: 600; font-size: 15px; margin: 0; }
-.card .csub { color: var(--ink-2); font-size: 13px; margin: 2px 0 8px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
-.chart { position: relative; width: 100%; }
-.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
-.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin: 4px 0 6px; }
-.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
-.legend i.line { height: 2px; width: 14px; border-radius: 1px; vertical-align: 3px; }
-details { margin: 4px 0 10px; font-size: 13px; color: var(--ink-2); }
-details summary { cursor: pointer; color: var(--muted); }
+
+.part { position: relative; overflow: hidden; }
+.part .tag { margin-bottom: 10px; }
+.part h3 { margin: 6px 0 8px; font-size: 22px; }
+.part p { margin: 0 0 10px; }
+.part .meta { font: 12px var(--mono); color: var(--muted); border-top: 1px dashed var(--border-2); padding-top: 10px; margin: 12px 0 6px; }
+.tag { display: inline-block; font: 700 10px var(--mono); letter-spacing: .14em; padding: 4px 8px; border-radius: 999px; text-transform: uppercase; }
+.tag.rule { color: var(--s1); background: var(--s1-wash); }
+.tag.learn { color: var(--s2); background: var(--s2-wash); }
+.tag.io { color: var(--ink-2); background: var(--surface-2); }
+
+/* pipeline */
+.legendtags { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin: 6px 0 18px; }
+.pipe { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; position: relative; list-style: none; padding: 0; margin: 0; }
+.pipe::before { content: ""; position: absolute; top: 36px; left: 4%; right: 4%; height: 2px; background: var(--grad); transform: scaleX(0); transform-origin: left; transition: transform 1.6s var(--ease); opacity: .8; }
+.pipe.in::before { transform: scaleX(1); }
+.step { position: relative; z-index: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 14px 10px; transition: border-color .3s, box-shadow .3s; }
+.step:hover { border-color: var(--border-2); box-shadow: 0 20px 50px -34px var(--glow); }
+.step .node { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font: 700 13px var(--mono); background: var(--surface-2); border: 1px solid var(--border-2); margin-bottom: 12px; }
+.step.learn .node { border-color: var(--s2); color: var(--s2); }
+.step.rule .node { border-color: var(--s1); color: var(--s1); }
+.step h4 { margin: 8px 0 2px; font-size: 15px; letter-spacing: -0.01em; }
+.step .sub { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
+.step details { margin-top: 8px; }
+.step details p { font-size: 13px; margin: 6px 0 4px; }
+
+details { margin: 6px 0 10px; font-size: 13px; color: var(--ink-2); }
+details summary { cursor: pointer; color: var(--muted); font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+details summary::-webkit-details-marker { display: none; }
+details summary::after { content: "+"; font-size: 13px; transition: transform .25s; }
+details[open] summary::after { transform: rotate(45deg); }
+details[open] > *:not(summary) { animation: fadeUp .35s var(--ease) both; }
+
 table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; font-variant-numeric: tabular-nums; }
-th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); }
+th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--grid); }
 th { color: var(--ink-2); font-weight: 600; }
+td { color: var(--ink-2); }
 td.num, th.num { text-align: right; }
 .tablewrap { overflow-x: auto; }
-.callout { border-left: 3px solid var(--accent); background: var(--surface); padding: 12px 16px; border-radius: 0 12px 12px 0; margin: 16px 0; }
-.callout b { font-weight: 600; }
-ul.clean { padding-left: 20px; max-width: 72ch; }
-ul.clean li { margin: 6px 0; }
-code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
-.flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 16px 0; counter-reset: st; }
-.flow div { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--ink-2); }
-.flow div b { display: block; color: var(--ink); font-size: 14px; margin-bottom: 2px; }
-.flow div::before { counter-increment: st; content: counter(st); color: var(--muted); font-size: 12px; display: block; }
-.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--page); font-size: 12px; line-height: 1.4; padding: 6px 8px; border-radius: 6px; white-space: nowrap; transform: translate(-50%, calc(-100% - 10px)); opacity: 0; transition: opacity .08s; z-index: 5; }
+
+.callout { position: relative; border: 1px solid var(--border); background: linear-gradient(90deg, var(--s1-wash), transparent 70%); padding: 16px 18px 16px 20px; border-radius: 14px; margin: 18px 0; color: var(--ink-2); max-width: 80ch; }
+.callout::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: var(--grad); }
+.callout b { color: var(--ink); }
+.note-label { font: 700 11px var(--mono); letter-spacing: .16em; color: var(--s2); display: block; margin-bottom: 6px; }
+
+ul.clean { padding-left: 20px; max-width: 76ch; color: var(--ink-2); }
+ul.clean li { margin: 7px 0; }
+
+/* charts */
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { font-family: var(--sans); }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); margin: 4px 0 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--page); font-size: 12px; line-height: 1.4; padding: 7px 9px; border-radius: 8px; white-space: nowrap; transform: translate(-50%, calc(-100% - 10px)); opacity: 0; transition: opacity .1s; z-index: 5; box-shadow: 0 10px 30px -10px rgba(0,0,0,.5); }
 .tip.on { opacity: 1; }
-.themebtn { position: fixed; top: 12px; right: 12px; background: var(--surface); color: var(--ink-2); border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px; font: 13px system-ui, sans-serif; cursor: pointer; z-index: 10; }
-footer { color: var(--muted); font-size: 13px; margin-top: 64px; border-top: 1px solid var(--grid); padding-top: 16px; }
-text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.chart .bar { transform-box: fill-box; transform-origin: 50% 100%; transform: scaleY(0); transition: transform .9s var(--ease); }
+.chart .hb { transform-box: fill-box; transform-origin: 0 50%; transform: scaleX(0); transition: transform 1s var(--ease); }
+.chart .hb.neg { transform-origin: 100% 50%; }
+.chart .vt, .chart .dot { opacity: 0; transition: opacity .5s ease; }
+.chart .ln { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 1.8s cubic-bezier(.4, 0, .2, 1); }
+.chart .ar { opacity: 0; transition: opacity 1.2s .6s ease; }
+.chart .hc { opacity: 0; transform-box: fill-box; transform-origin: center; transform: scale(.5); transition: opacity .5s ease, transform .5s var(--ease); }
+.chart .sc-dot { transform: translateY(var(--dy)); opacity: 0; transition: transform 1s cubic-bezier(.34, 1.45, .64, 1), opacity .3s ease; transition-delay: var(--d); }
+.chart .sc-zone { opacity: 0; transition: opacity .8s .2s ease; }
+.chart.in .bar { transform: none; }
+.chart.in .hb { transform: none; }
+.chart.in .vt, .chart.in .dot, .chart.in .ar, .chart.in .sc-zone { opacity: 1; }
+.chart.in .ln { stroke-dashoffset: 0; }
+.chart.in .hc { opacity: 1; transform: none; }
+.chart.in .sc-dot { transform: none; opacity: .92; }
+
+/* key finding */
+.finding { position: relative; margin-top: 104px; padding: 44px 30px 26px !important; border-radius: 26px; border: 1px solid transparent;
+  background: linear-gradient(var(--page), var(--page)) padding-box, conic-gradient(from var(--ang), var(--s1), var(--vi), var(--s2), var(--s1)) border-box; animation: spin 10s linear infinite; }
+@keyframes spin { to { --ang: 360deg; } }
+.finding::after { content: ""; position: absolute; inset: 0; border-radius: 26px; background: radial-gradient(ellipse at 20% 0%, var(--s1-wash), transparent 55%), radial-gradient(ellipse at 90% 100%, var(--s2-wash), transparent 55%); pointer-events: none; }
+.finding > * { position: relative; z-index: 1; }
+.schema-legend { display: flex; gap: 22px; flex-wrap: wrap; font-size: 14px; color: var(--ink-2); margin: 6px 0 4px; }
+.schema-legend b { font-variant-numeric: tabular-nums; }
+.schema-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 7px; vertical-align: -1px; }
+
+/* features + results */
+.feat { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 18px 0 8px; }
+.feat .card { margin: 0; padding: 16px; }
+.feat .card h4 { margin: 10px 0 4px; font-size: 15px; }
+.feat .card p { font-size: 13.5px; margin: 0; }
+.resgrid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; margin-top: 18px; }
+.resgrid > .card { margin: 0; }
+.rev { list-style: none; padding: 0; margin: 6px 0 4px; }
+.rev li { display: grid; grid-template-columns: 30px 1fr 150px 62px; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--grid); }
+.rev li:last-child { border-bottom: 0; }
+.rn { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 700 11px var(--mono); background: var(--surface-2); color: var(--ink-2); }
+.rk { font-size: 14px; color: var(--ink-2); }
+.rbar { height: 8px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+.rbar i { display: block; height: 100%; width: var(--w); background: var(--grad); border-radius: 99px; transform: scaleX(0); transform-origin: left; transition: transform 1.1s var(--ease); }
+.rev.in .rbar i { transform: none; }
+.rv { font: 700 13px var(--mono); text-align: right; font-variant-numeric: tabular-nums; }
+.rev li.best .rn { background: var(--grad); color: #fff; }
+.rev li.best .rk { color: var(--ink); font-weight: 600; }
+.bigscore { display: flex; flex-direction: column; justify-content: space-between; gap: 14px; }
+.bigscore .big { font-size: clamp(56px, 8vw, 92px); font-weight: 750; letter-spacing: -0.04em; line-height: 1; }
+.bigscore .cap { color: var(--ink-2); font-size: 14px; margin: 0; }
+
+/* debrief */
+.deb h3 { display: flex; align-items: center; gap: 10px; margin: 2px 0 10px; }
+.deb h3 .mk { font: 700 13px var(--mono); width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; }
+.deb .ok .mk { background: rgba(34,197,94,0.14); color: #22c55e; }
+.deb .no .mk { background: var(--s2-wash); color: var(--s2); }
+.deb .next .mk { background: var(--s1-wash); color: var(--s1); }
+.deb ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 14.5px; }
+.deb li { margin: 8px 0; }
+
+/* conclusion */
+.concl { list-style: none; padding: 0; margin: 10px 0 0; counter-reset: c; }
+.concl li { counter-increment: c; display: grid; grid-template-columns: 56px 1fr; gap: 14px; padding: 18px 0; border-bottom: 1px solid var(--grid); color: var(--ink-2); font-size: 16.5px; max-width: 900px; }
+.concl li::before { content: "0" counter(c); font: 700 14px var(--mono); color: var(--s1); padding-top: 3px; }
+
+/* team + deliverables */
+.team .card { margin: 0; }
+.ava { width: 58px; height: 58px; border-radius: 50%; display: grid; place-items: center; font: 700 18px var(--mono); border: 2px solid transparent;
+  background: linear-gradient(var(--surface-2), var(--surface-2)) padding-box, var(--grad) border-box; margin-bottom: 12px; }
+.team h4 { margin: 0; font-size: 17px; }
+.team .role { color: var(--s1); font: 600 12px var(--mono); letter-spacing: .06em; margin: 3px 0 10px; }
+.team ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 14px; }
+.deliv { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 18px; }
+.dl { display: flex; flex-direction: column; gap: 4px; padding: 18px; border-radius: 14px; background: var(--surface); border: 1px solid var(--border); text-decoration: none; transition: border-color .3s, transform .3s var(--ease), box-shadow .3s; }
+.dl:hover { border-color: var(--border-2); transform: translateY(-3px); box-shadow: 0 20px 50px -30px var(--glow); }
+.dl b { font-size: 16px; }
+.dl code { background: none; padding: 0; color: var(--muted); font-size: 12px; }
+.dl .go { margin-top: 10px; font: 600 12px var(--mono); letter-spacing: .1em; color: var(--s1); }
+.dl .go span { display: inline-block; transition: transform .25s var(--ease); }
+.dl:hover .go span { transform: translateX(5px); }
+
+footer { color: var(--muted); font-size: 13px; margin-top: 90px; border-top: 1px solid var(--border); padding: 22px 0 40px; display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+footer .mono { font-family: var(--mono); letter-spacing: .1em; }
+
+/* reveal */
+.js .reveal { opacity: 0; transform: translateY(26px); transition: opacity .9s var(--ease), transform .9s var(--ease); }
+.js .reveal.in { opacity: 1; transform: none; }
+
+/* responsive */
+@media (max-width: 1000px) {
+  .pipe { grid-template-columns: 1fr; gap: 10px; }
+  .pipe::before { top: 14px; bottom: 14px; left: 36px; right: auto; width: 2px; height: auto; transform: scaleY(0); transform-origin: top; background: linear-gradient(var(--s1), var(--vi), var(--s2)); }
+  .pipe.in::before { transform: scaleY(1); }
+  .step { display: grid; grid-template-columns: 44px 1fr; column-gap: 14px; }
+  .step .node { grid-row: span 4; margin: 0; }
+  .step > *:not(.node) { grid-column: 2; }
+  .step .tag { justify-self: start; }
+  .resgrid { grid-template-columns: 1fr; }
+  .grid3 { grid-template-columns: 1fr; }
+}
+@media (max-width: 1180px) { .logo span { display: none; } }
+@media (max-width: 760px) {
+  .topnav { gap: 10px; padding: 0 12px; }
+  .scrollhint { display: none; }
+  .hero { min-height: auto; }
+  .hero-inner { padding: 110px 18px 90px; }
+  .kpis { grid-template-columns: 1fr 1fr; margin-top: -40px; }
+  .grid2 { grid-template-columns: 1fr; }
+  .finding { padding: 32px 16px 18px !important; }
+  .rev li { grid-template-columns: 28px 1fr 58px; }
+  .rev .rbar { grid-column: 2 / 4; grid-row: 2; }
+  .concl li { grid-template-columns: 40px 1fr; font-size: 15.5px; }
+  main section { padding-top: 80px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .js .reveal { opacity: 1; transform: none; }
+  .chart .bar, .chart .hb, .chart .hc, .chart .sc-dot { transform: none; }
+  .chart .vt, .chart .dot, .chart .ar, .chart .hc, .chart .sc-zone { opacity: 1; }
+  .chart .sc-dot { opacity: .92; }
+  .chart .ln { stroke-dashoffset: 0; }
+  .pipe::before, .rbar i { transform: none; }
+}
 </style>
 </head>
 <body>
-<button class="themebtn" id="themebtn" type="button" aria-label="Переключить тему">Тема</button>
-<div class="wrap">
-
-<header class="top">
-  <p class="eyebrow">Хакатон по финмониторингу · EDA и ключевые находки</p>
-  <h1>Эскалация AML-алертов: что скрыто в истории транзакций</h1>
-  <p class="lead">Как мы изучали данные, какую закономерность генератора нашли и как она определила модель. Главный вывод: у каждого клиента есть скрытый класс, и его выдают самые маленькие суммы операций.</p>
-  <nav class="toc" aria-label="Содержание">
+<div class="progress" id="progress"></div>
+<nav class="topnav" aria-label="Навигация">
+  <a class="logo" href="#top"><i></i>AML <span>// ESCALATION</span></a>
+  <div class="nav-links">
     <a href="#approach">Подход</a><a href="#data">Данные</a><a href="#target">Таргет</a><a href="#activity">Активность</a>
-    <a href="#amounts">Суммы</a><a href="#profile">Профиль клиента</a><a href="#floors">Классовые минимумы</a>
-    <a href="#features">Признаки и модель</a><a href="#conclusion">Выводы</a>
-  </nav>
+    <a href="#amounts">Суммы</a><a href="#profile">Профиль</a><a href="#floors">Находка</a><a href="#features">Модель</a>
+    <a href="#debrief">Разбор</a><a href="#conclusion">Выводы</a><a href="#team">Команда</a>
+  </div>
+  <button class="themebtn" id="themebtn" type="button" aria-label="Переключить тему">СВЕТЛАЯ</button>
+</nav>
+
+<header class="hero" id="top">
+  <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+  <canvas id="particles" aria-hidden="true"></canvas>
+  <div class="hero-inner">
+    <p class="eyebrow">Хакатон по финмониторингу <b>//</b> AML-алерты</p>
+    <h1><span class="ln"><span>Эскалация предсказана.</span></span><span class="ln"><span class="grad-text">Скрытый класс найден.</span></span></h1>
+    <p class="lead">Каждый алерт — сотни транзакций за 180 дней. Мы нашли закономерность генератора данных: у каждого клиента есть скрытый класс A или B, и его выдают самые маленькие суммы операций. На этом построена модель.</p>
+    <div class="ctas">
+      <a class="btn primary" href="#floors">Главная находка <span class="arr">→</span></a>
+      <a class="btn ghost" href="#approach">Как это работает <span class="arr">→</span></a>
+    </div>
+    <div class="chips">
+      <span class="chip">CV ROC-AUC <b>0.6643</b></span>
+      <span class="chip">STRATIFIED <b>5-FOLD × 3</b></span>
+      <span class="chip"><b>LGB · CAT · XGB</b></span>
+      <span class="chip">TEAM <b>F2F427DD</b></span>
+    </div>
+  </div>
+  <div class="scrollhint">SCROLL<i></i></div>
 </header>
 
-<div class="hero">
-  <div class="big" id="hero-auc">0.6643</div>
-  <p class="cap">ROC-AUC на кросс-валидации (OOF, stratified 5-fold × 3 повтора): бленд LightGBM, CatBoost и XGBoost. Базовая модель на обычных агрегатах давала 0.637.</p>
-</div>
+<main class="wrap">
 
-<h2 id="approach"><span class="sec-num">1</span>Подход</h2>
-<p>Один алерт — это сотни транзакций за 180 дней. Сначала мы изучили структуру данных и различия между классами, затем проверяли гипотезы о том, как устроен генератор синтетических данных. Каждую идею проверяли на одних и тех же фолдах повторной кросс-валидации: сабмит один, лидерборда нет, так что вся оценка строится на CV.</p>
-<div class="flow">
-  <div><b>EDA транзакций</b>окно истории, всплеск перед сигналом, типы, суммы</div>
-  <div><b>Профиль клиента</b>n, уровень, разброс и минимум сумм по 8 сегментам</div>
-  <div><b>Классовые минимумы</b>операции у порога выдают скрытый класс A или B</div>
-  <div><b>Классификатор класса</b>обучен на якорях без таргета, AUC 0.955</div>
-  <div><b>GBDT-ансамбль</b>LightGBM, CatBoost и XGBoost, бленд по рангам</div>
-</div>
+<section class="kpis reveal" aria-label="Ключевые цифры" style="padding-top:0">
+  <div class="kpi"><div class="kv grad-text" data-count="0.6643" data-dec="4">0.6643</div><div class="kl">CV ROC-AUC</div><div class="ks">OOF, 5-fold × 3, бленд трёх GBDT</div></div>
+  <div class="kpi"><div class="kv" id="kpi-tx" data-count="10.0" data-dec="1" data-suffix=" млн" data-comma="1">10,0 млн</div><div class="kl">транзакций</div><div class="ks">train + test, 20 000 алертов</div></div>
+  <div class="kpi"><div class="kv" id="kpi-det" data-count="6045" data-dec="0">6 045</div><div class="kl">клиентов по правилу</div><div class="ks">класс A/B, ноль противоречий</div></div>
+  <div class="kpi"><div class="kv" data-count="0.955" data-dec="3">0.955</div><div class="kl">AUC классификатора класса</div><div class="ks">обучен без таргета</div></div>
+</section>
 
-<h2 id="data"><span class="sec-num">2</span>Данные и структура</h2>
-<p>Данные реляционные: таблица алертов (дата и метка) и таблица транзакций, где на один <code>signal_id</code> приходится много строк. Пропусков и дубликатов нет, связей между клиентами нет.</p>
-<div class="tiles" id="kpis"></div>
-<div class="tablewrap"><table>
-  <thead><tr><th>Поле</th><th>Смысл</th><th>Значения</th></tr></thead>
-  <tbody>
-    <tr><td><code>tranzaksiya_vaqti</code></td><td>время транзакции</td><td>ровно 180 дней до даты алерта</td></tr>
-    <tr><td><code>kirim_chiqim</code></td><td>направление</td><td>kirim (приход) 75.6% · chiqim (расход) 24.4%</td></tr>
-    <tr><td><code>tranzaksiya_turi</code></td><td>тип</td><td>karta 53.8% · bank_otkazmasi 39.4% · naqd 6.3% · xalqaro 0.5%</td></tr>
-    <tr><td><code>miqdor_indeksi</code></td><td>стандартизованная сумма</td><td>от −2.91 до 6.69, внутри клиента распределена нормально</td></tr>
-  </tbody>
-</table></div>
-<div class="card">
-  <p class="ctitle">Сегменты: доля транзакций и средний индекс суммы</p>
-  <p class="csub">Сегмент = тип × направление. Уровень сумм сильно зависит от сегмента, поэтому все признаки мы считали внутри сегментов.</p>
-  <div class="grid2"><div class="chart" id="c-seg-share"></div><div class="chart" id="c-seg-mean"></div></div>
-  <details><summary>Таблица</summary><div class="tablewrap" id="t-seg"></div></details>
-</div>
-<p><b>Train и test взяты из одного распределения:</b> классификатор, который пытается отличить train от test, получает AUC 0.500. Даты сигналов в обоих наборах покрывают 2025–2026 годы. Поэтому стратифицированной кросс-валидации можно доверять как оценке скрытого теста.</p>
-
-<h2 id="target"><span class="sec-num">3</span>Таргет</h2>
-<p>Эскалирован <b id="t-rate">17.2%</b> алертов (2 405 из 14 000). По месяцам доля стабильна (14–21%), тренда во времени нет, так что дата сигнала почти не несёт информации.</p>
-<div class="card">
-  <p class="ctitle">Доля эскалаций по месяцам даты сигнала</p>
-  <p class="csub">Train, 24 месяца. Линия — средняя доля.</p>
-  <div class="chart" id="c-monthly"></div>
-  <details><summary>Таблица</summary><div class="tablewrap" id="t-monthly"></div></details>
-</div>
-
-<h2 id="activity"><span class="sec-num">4</span>Активность во времени и перед сигналом</h2>
-<p>История всегда покрывает ровно 180 дней. Активность <b>снижается к дате сигнала</b>: больше половины транзакций приходится на интервал 90–180 дней. На самом деле перед сигналом спрятан пик: <b id="t-burst">7.9%</b> всех транзакций лежат в последних ~3 минутах перед полуночью даты сигнала. Отсюда и «аномальный» 23-й час в распределении по часам.</p>
-<div class="grid2">
-  <div class="card">
-    <p class="ctitle">Транзакции по дням до сигнала</p>
-    <p class="csub">Дни 1–179; день 0 со всплеском показан справа.</p>
-    <div class="chart" id="c-daily"></div>
+<section id="approach">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">01</span> // Задача и подход</p>
+    <h2>Сотни транзакций на алерт. Один сабмит. Без лидерборда.</h2>
   </div>
-  <div class="card">
-    <p class="ctitle">Последние 10 минут перед сигналом</p>
-    <p class="csub">Транзакции по 10-секундным интервалам: почти всё укладывается в 180 секунд.</p>
-    <div class="chart" id="c-burst"></div>
+  <div class="grid2">
+    <div class="card part reveal">
+      <span class="tag io">Дано</span>
+      <h3>История клиента</h3>
+      <p>Один алерт — это сотни транзакций ровно за 180 дней до даты сигнала: время, направление (приход или расход), тип операции и стандартизованный индекс суммы.</p>
+      <div class="meta">14 000 train · 6 000 test · 10 млн транзакций</div>
+    </div>
+    <div class="card part reveal">
+      <span class="tag learn">Нужно</span>
+      <h3>Вероятность эскалации</h3>
+      <p>Для каждого алерта из теста — вероятность того, что специалист передаст его на расследование. Важен только порядок предсказаний: метрика ROC-AUC.</p>
+      <div class="meta">один официальный сабмит · оценка только по CV</div>
+    </div>
   </div>
-</div>
-<div class="card">
-  <p class="ctitle">Распределение транзакций по часу суток</p>
-  <p class="csub">Час 23 утроен всплеском перед сигналом, остальные часы равномерны.</p>
-  <div class="chart" id="c-hour"></div>
-</div>
-<p>Всплеск есть и в test, это артефакт генерации, а не выброс. Мы сохранили его и сделали из него отдельные признаки (состав, суммы, доля исходящих). Но у эскалированных и отклонённых алертов он почти не различается, а ритм активности (время суток, выходные, интервалы) классы не разделяет.</p>
+  <p class="reveal" style="margin-top:22px">Сначала мы изучили структуру данных и различия между классами, затем проверяли гипотезы о том, как устроен генератор синтетических данных. Каждую идею проверяли на одних и тех же фолдах повторной кросс-валидации: сабмит один, лидерборда нет, так что вся оценка строится на CV.</p>
 
-<h2 id="amounts"><span class="sec-num">5</span>Суммы: у эскалированных ниже, и дело не в выбросах</h2>
-<p>Доли типов и направлений у двух классов почти совпадают (разница в третьем знаке). Различаются суммы: у эскалированных алертов распределение смещено к меньшим значениям, сильнее всего у банковских переводов.</p>
-<div class="card">
-  <p class="ctitle">Во сколько раз суммы данного размера чаще у эскалированных</p>
-  <p class="csub">Отношение доли транзакций у эскалированных алертов к доле у отклонённых, интервалы 0.2, train. Выше 1 — чаще у эскалированных.</p>
-  <div class="chart" id="c-amt"></div>
-</div>
-<div class="card">
-  <p class="ctitle">Медиана суммы по сегментам</p>
-  <p class="csub">Главный разрыв у банковских переводов: 0.297 против 0.149 для исходящих.</p>
-  <div class="legend"><span><i style="background:var(--s1)"></i>Отклонён</span><span><i style="background:var(--s2)"></i>Эскалирован</span></div>
-  <div class="chart" id="c-segmed"></div>
-</div>
+  <div class="sh reveal" style="margin-top:44px">
+    <p class="eyebrow"><span class="num">Пайплайн</span> // от транзакций к вероятности</p>
+  </div>
+  <div class="legendtags reveal"><span><span class="tag rule">Правило</span> геометрия сумм, без обучения</span><span><span class="tag learn">Обучение</span> обучаемая модель</span></div>
+  <ol class="pipe">
+    <li class="step io reveal"><div class="node">01</div><span class="tag io">Вход</span><h4>Транзакции</h4><div class="sub">180 дней · ~460 на алерт</div>
+      <details><summary>Подробнее</summary><p>Train и test вместе: 10 млн операций. Метка эскалации есть только у train.</p></details></li>
+    <li class="step rule reveal"><div class="node">02</div><span class="tag rule">Правило</span><h4>8 сегментов</h4><div class="sub">тип × направление</div>
+      <details><summary>Подробнее</summary><p>Уровень сумм сильно зависит от типа операции, поэтому все признаки считаются внутри сегментов.</p></details></li>
+    <li class="step rule reveal"><div class="node">03</div><span class="tag rule">Правило</span><h4>Профиль клиента</h4><div class="sub">уровень, разброс, минимум</div>
+      <details><summary>Подробнее</summary><p>n, доли, mean, std, квантили, min и max по сегментам, плюс уровни относительно самого клиента.</p></details></li>
+    <li class="step rule reveal"><div class="node">04</div><span class="tag rule">Правило</span><h4>Классовые минимумы</h4><div class="sub">операции у порога</div>
+      <details><summary>Подробнее</summary><p>Одна транзакция между минимумами двух классов однозначно выдаёт класс клиента.</p></details></li>
+    <li class="step learn reveal"><div class="node">05</div><span class="tag learn">Обучение</span><h4>Классификатор A/B</h4><div class="sub">5 738 якорей, AUC 0.955</div>
+      <details><summary>Подробнее</summary><p>LightGBM по форме профиля, без признаков, раскрывающих банковскую полосу, и без таргета.</p></details></li>
+    <li class="step learn reveal"><div class="node">06</div><span class="tag learn">Обучение</span><h4>GBDT-ансамбль</h4><div class="sub">LightGBM · CatBoost · XGBoost</div>
+      <details><summary>Подробнее</summary><p>Одинаковые фолды 5 × 3, 3 seed'а на фолд, фиксированное число итераций.</p></details></li>
+    <li class="step io reveal"><div class="node">07</div><span class="tag io">Выход</span><h4>Вероятность</h4><div class="sub">бленд рангов → [0, 1]</div>
+      <details><summary>Подробнее</summary><p>Среднее рангов 135 фолдовых моделей, нормированное в [0, 1].</p></details></li>
+  </ol>
+</section>
 
-<h2 id="profile"><span class="sec-num">6</span>Профиль клиента: уровень сумм общий для всех сегментов</h2>
-<p>Средние суммы клиента по разным сегментам коррелируют на уровне <b>0.83</b>: у каждого клиента есть свой общий «уровень». Разброс этого уровня между клиентами (std ~0.6) намного больше, чем эффект эскалации (~0.13), поэтому абсолютные суммы — слабый признак. А разность «переводы минус карты» внутри одного клиента убирает этот шум: <b>AUC 0.602</b> у одного признака против 0.572 у лучшего абсолютного.</p>
-<div class="card">
-  <p class="ctitle">Корреляция средних сумм клиента между сегментами</p>
-  <p class="csub">20 000 клиентов. Чем темнее, тем сильнее связь.</p>
-  <div class="chart" id="c-corr"></div>
-</div>
-<p>Сдвиг держится одинаково на всём 180-дневном окне. Это постоянная черта клиента, а не изменение поведения перед алертом. Поэтому признаки мы считаем по всей истории, а не только по последним дням.</p>
+<section id="data">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">02</span> // Данные и структура</p>
+    <h2>Реляционные данные: один алерт, много строк.</h2>
+  </div>
+  <p class="reveal">Таблица алертов (дата и метка) и таблица транзакций, где на один <code>signal_id</code> приходится много строк. Пропусков и дубликатов нет, связей между клиентами нет.</p>
+  <div class="tiles reveal" id="kpis"></div>
+  <div class="card reveal"><div class="tablewrap"><table>
+    <thead><tr><th>Поле</th><th>Смысл</th><th>Значения</th></tr></thead>
+    <tbody>
+      <tr><td><code>tranzaksiya_vaqti</code></td><td>время транзакции</td><td>ровно 180 дней до даты алерта</td></tr>
+      <tr><td><code>kirim_chiqim</code></td><td>направление</td><td>kirim (приход) 75.6% · chiqim (расход) 24.4%</td></tr>
+      <tr><td><code>tranzaksiya_turi</code></td><td>тип</td><td>karta 53.8% · bank_otkazmasi 39.4% · naqd 6.3% · xalqaro 0.5%</td></tr>
+      <tr><td><code>miqdor_indeksi</code></td><td>стандартизованная сумма</td><td>от −2.91 до 6.69, внутри клиента распределена нормально</td></tr>
+    </tbody>
+  </table></div></div>
+  <div class="card reveal">
+    <p class="ctitle">Сегменты: доля транзакций и средний индекс суммы</p>
+    <p class="csub">Сегмент = тип × направление. Уровень сумм сильно зависит от сегмента, поэтому все признаки мы считали внутри сегментов.</p>
+    <div class="grid2"><div class="chart" id="c-seg-share"></div><div class="chart" id="c-seg-mean"></div></div>
+    <details><summary>Таблица</summary><div class="tablewrap" id="t-seg"></div></details>
+  </div>
+  <div class="callout reveal"><b>Train и test взяты из одного распределения:</b> классификатор, который пытается отличить train от test, получает AUC 0.500. Даты сигналов в обоих наборах покрывают 2025–2026 годы. Поэтому стратифицированной кросс-валидации можно доверять как оценке скрытого теста.</div>
+</section>
 
-<h2 id="floors"><span class="sec-num">7</span>Главная находка: классовые минимумы сумм</h2>
-<p>Следующим шагом добавили к профилю минимум суммы в каждом сегменте. Он дал <b>+0.010 AUC</b>, хотя медиана, квантили и максимум не дали ничего. Второй по величине минимум тоже бесполезен, а значит, дело в самой нижней границе распределения. Разбор привёл к механизму генератора:</p>
-<div class="callout">У каждого клиента есть <b>скрытый класс A или B</b>. У каждого класса в каждом сегменте свой <b>жёсткий минимум суммы</b>; значения ниже минимума «прижаты» в узкую полосу над ним. Поэтому операция в зоне между двумя минимумами <b>однозначно</b> определяет класс клиента.</div>
-<div class="card">
-  <p class="ctitle">Банковские входящие переводы у порога</p>
-  <p class="csub">Число транзакций по интервалам 0.005 от минимума сегмента, для клиентов с известным классом. Классы не пересекаются.</p>
-  <div class="legend"><span><i style="background:var(--s1)"></i>Класс A</span><span><i style="background:var(--s2)"></i>Класс B</span></div>
-  <div class="chart" id="c-floor"></div>
-  <details><summary>Таблица</summary><div class="tablewrap" id="t-floor"></div></details>
-</div>
-<div class="card">
-  <p class="ctitle">Доля эскалаций у транзакций в тех же интервалах</p>
-  <p class="csub">Все train-транзакции. Средняя доля 17%: полоса A даёт ~10%, полоса B ~28%.</p>
-  <div class="chart" id="c-floor-rate"></div>
-</div>
-<div class="grid2">
-  <div>
-    <h3>Минимумы классов по сегментам</h3>
-    <p>Смещение от минимума сегмента. Ноль означает, что класс может опускаться до самого порога.</p>
-    <div class="tablewrap" id="t-classfloor"></div>
+<section id="target">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">03</span> // Таргет</p>
+    <h2>Эскалирован каждый шестой алерт.</h2>
   </div>
-  <div>
-    <h3>Проверка правила</h3>
-    <div class="tiles" id="det-tiles" style="grid-template-columns: repeat(2, 1fr);"></div>
-    <p>Правила по картам совпадают с классом, найденным по банковским переводам, на 100%, хотя это независимые сегменты.</p>
+  <p class="reveal">Эскалирован <b id="t-rate">17.2%</b> алертов (2 405 из 14 000). По месяцам доля стабильна (14–21%), тренда во времени нет, так что дата сигнала почти не несёт информации.</p>
+  <div class="card reveal">
+    <p class="ctitle">Доля эскалаций по месяцам даты сигнала</p>
+    <p class="csub">Train, 24 месяца. Линия — средняя доля.</p>
+    <div class="chart" id="c-monthly"></div>
+    <details><summary>Таблица</summary><div class="tablewrap" id="t-monthly"></div></details>
   </div>
-</div>
-<h3>Класс для остальных 70% клиентов</h3>
-<p>Классы различаются и формой профиля: отношениями разбросов между сегментами и разностями уровней. Мы обучили классификатор «A или B» на якорях (класс из полос банковских переводов, train и test вместе) на признаках, которые <b>не раскрывают</b> банковскую полосу. <b>Метка эскалации здесь не используется.</b> OOF AUC классификатора 0.955.</p>
-<div class="card">
-  <p class="ctitle">Доля эскалаций по вероятности класса B</p>
-  <p class="csub">20 групп train-алертов по предсказанной вероятности класса B: доля выходит на плато ~10% и ~30%, то есть класс бинарный.</p>
-  <div class="chart" id="c-lat"></div>
-  <details><summary>Таблица</summary><div class="tablewrap" id="t-lat"></div></details>
-</div>
-<p>Внутри одного класса сигнал очень слабый (AUC ~0.515). Почти вся предсказательная сила задачи в том, чтобы узнать класс клиента. Если бы класс был известен идеально, это дало бы AUC ≈ 0.66.</p>
+</section>
 
-<h2 id="features"><span class="sec-num">8</span>Признаки и модель</h2>
-<ul class="clean">
-  <li><b>Профиль по 8 сегментам:</b> число и доля транзакций, mean, std, медиана, q10, q90, <b>min</b>, max.</li>
-  <li><b>Относительные уровни:</b> среднее сегмента минус уровень клиента, попарные разности сегментов, отношения разбросов к картам.</li>
-  <li><b>Скрытый класс:</b> счётчики полос у порога, вероятность класса B, якорная метка.</li>
-  <li><b>Время и потоки:</b> окна 1–180 дней, всплеск перед сигналом, интервалы, net-flow, транзит «вход → выход».</li>
-  <li><b>Гистограммы сумм</b> внутри сегментов по глобальным квантилям.</li>
-</ul>
-<div class="grid2">
-  <div class="card">
-    <p class="ctitle">Как рос CV ROC-AUC</p>
-    <p class="csub">Средний OOF AUC по 3 повторам CV.</p>
-    <div class="chart" id="c-progress"></div>
+<section id="activity">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">04</span> // История транзакций</p>
+    <h2>Активность во времени и перед сигналом.</h2>
   </div>
-  <div class="card">
-    <p class="ctitle">Ablation: убираем группу признаков</p>
-    <p class="csub">До добавления скрытого класса. Профиль и минимумы — основа.</p>
-    <div class="chart" id="c-ablation"></div>
+  <p class="reveal">История всегда покрывает ровно 180 дней. Активность <b>снижается к дате сигнала</b>: больше половины транзакций приходится на интервал 90–180 дней. Но перед сигналом спрятан пик: <b id="t-burst">7.9%</b> всех транзакций лежат в последних ~3 минутах перед полуночью даты сигнала. Отсюда и «аномальный» 23-й час в распределении по часам.</p>
+  <div class="grid2">
+    <div class="card reveal">
+      <p class="ctitle">Транзакции по дням до сигнала</p>
+      <p class="csub">Дни 1–179; день 0 со всплеском показан справа.</p>
+      <div class="chart" id="c-daily"></div>
+    </div>
+    <div class="card reveal">
+      <p class="ctitle">Последние 10 минут перед сигналом</p>
+      <p class="csub">Транзакции по 10-секундным интервалам: почти всё укладывается в 180 секунд.</p>
+      <div class="chart" id="c-burst"></div>
+    </div>
   </div>
-</div>
-<div class="grid2">
-  <div class="card">
-    <p class="ctitle">Модели на одинаковых фолдах</p>
-    <p class="csub">Фиксированное число итераций, 3 seed'а на фолд.</p>
-    <div class="chart" id="c-models"></div>
+  <div class="card reveal">
+    <p class="ctitle">Распределение транзакций по часу суток</p>
+    <p class="csub">Час 23 утроен всплеском перед сигналом, остальные часы равномерны.</p>
+    <div class="chart" id="c-hour"></div>
   </div>
-  <div class="card">
+  <p class="reveal">Всплеск есть и в test, это артефакт генерации, а не выброс. Мы сохранили его и сделали из него отдельные признаки (состав, суммы, доля исходящих). Но у эскалированных и отклонённых алертов он почти не различается, а ритм активности (время суток, выходные, интервалы) классы не разделяет.</p>
+</section>
+
+<section id="amounts">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">05</span> // Суммы и поведение</p>
+    <h2>У эскалированных суммы ниже, и дело не в выбросах.</h2>
+  </div>
+  <p class="reveal">Доли типов и направлений у двух классов почти совпадают (разница в третьем знаке). Различаются суммы: у эскалированных алертов распределение смещено к меньшим значениям, сильнее всего у банковских переводов.</p>
+  <div class="card reveal">
+    <p class="ctitle">Во сколько раз суммы данного размера чаще у эскалированных</p>
+    <p class="csub">Отношение доли транзакций у эскалированных алертов к доле у отклонённых, интервалы 0.2, train. Выше 1 — чаще у эскалированных.</p>
+    <div class="chart" id="c-amt"></div>
+  </div>
+  <div class="card reveal">
+    <p class="ctitle">Медиана суммы по сегментам</p>
+    <p class="csub">Главный разрыв у банковских переводов: 0.297 против 0.149 для исходящих.</p>
+    <div class="legend"><span><i style="background:var(--s1)"></i>Отклонён</span><span><i style="background:var(--s2)"></i>Эскалирован</span></div>
+    <div class="chart" id="c-segmed"></div>
+  </div>
+</section>
+
+<section id="profile">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">06</span> // Профиль клиента</p>
+    <h2>Уровень сумм общий для всех сегментов.</h2>
+  </div>
+  <p class="reveal">Средние суммы клиента по разным сегментам коррелируют на уровне <b>0.83</b>: у каждого клиента есть свой общий «уровень». Разброс этого уровня между клиентами (std ~0.6) намного больше, чем эффект эскалации (~0.13), поэтому абсолютные суммы — слабый признак. А разность «переводы минус карты» внутри одного клиента убирает этот шум: <b>AUC 0.602</b> у одного признака против 0.572 у лучшего абсолютного.</p>
+  <div class="card reveal">
+    <p class="ctitle">Корреляция средних сумм клиента между сегментами</p>
+    <p class="csub">20 000 клиентов. Чем насыщеннее цвет, тем сильнее связь.</p>
+    <div class="chart" id="c-corr"></div>
+  </div>
+  <p class="reveal">Сдвиг держится одинаково на всём 180-дневном окне. Это постоянная черта клиента, а не изменение поведения перед алертом. Поэтому признаки мы считаем по всей истории, а не только по последним дням.</p>
+</section>
+
+<section id="floors" class="finding">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">07</span> // Главная находка</p>
+    <h2>Одна операция у порога выдаёт класс клиента.</h2>
+  </div>
+  <p class="reveal">Мы добавили к профилю минимум суммы в каждом сегменте. Он дал <b>+0.010 AUC</b>, хотя медиана, квантили и максимум не дали ничего. Второй по величине минимум тоже бесполезен, а значит, дело в самой нижней границе распределения. Разбор привёл к механизму генератора:</p>
+  <div class="callout reveal">У каждого клиента есть <b>скрытый класс A или B</b>. У каждого класса в каждом сегменте свой <b>жёсткий минимум суммы</b>; значения ниже минимума «прижаты» в узкую полосу над ним. Поэтому операция в зоне между двумя минимумами <b>однозначно</b> определяет класс клиента.</div>
+  <div class="card reveal">
+    <p class="ctitle">Как это устроено: банковские входящие переводы</p>
+    <p class="csub">Схема. Точки — операции клиентов у минимума сегмента. Операции класса A бывают ниже минимума B, класса B — никогда.</p>
+    <div class="chart" id="c-schema"></div>
+    <div class="schema-legend"><span><i style="background:var(--s1)"></i>Класс A · эскалаций <b id="sl-a">10.2%</b></span><span><i style="background:var(--s2)"></i>Класс B · эскалаций <b id="sl-b">30.6%</b></span></div>
+  </div>
+  <div class="grid2">
+    <div class="card reveal">
+      <p class="ctitle">Банковские входящие переводы у порога</p>
+      <p class="csub">Число транзакций по интервалам 0.005 от минимума сегмента, для клиентов с известным классом.</p>
+      <div class="legend"><span><i style="background:var(--s1)"></i>Класс A</span><span><i style="background:var(--s2)"></i>Класс B</span></div>
+      <div class="chart" id="c-floor"></div>
+      <details><summary>Таблица</summary><div class="tablewrap" id="t-floor"></div></details>
+    </div>
+    <div class="card reveal">
+      <p class="ctitle">Доля эскалаций в тех же интервалах</p>
+      <p class="csub">Все train-транзакции. Средняя доля 17%: полоса A даёт ~10%, полоса B ~28%.</p>
+      <div class="chart" id="c-floor-rate"></div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="reveal">
+      <h3>Минимумы классов по сегментам</h3>
+      <p>Смещение от минимума сегмента. Ноль означает, что класс может опускаться до самого порога.</p>
+      <div class="tablewrap" id="t-classfloor"></div>
+    </div>
+    <div class="reveal">
+      <h3>Проверка правила</h3>
+      <div class="tiles" id="det-tiles" style="grid-template-columns: repeat(2, 1fr);"></div>
+      <p>Правила по картам совпадают с классом, найденным по банковским переводам, на 100%, хотя это независимые сегменты.</p>
+    </div>
+  </div>
+  <h3 class="reveal">Класс для остальных 70% клиентов</h3>
+  <p class="reveal">Классы различаются и формой профиля: отношениями разбросов между сегментами и разностями уровней. Мы обучили классификатор «A или B» на <b>5 738 якорях</b> (класс из полос банковских переводов, train и test вместе) на признаках, которые <b>не раскрывают</b> банковскую полосу. <b>Метка эскалации здесь не используется.</b> OOF AUC классификатора 0.955.</p>
+  <div class="card reveal">
+    <p class="ctitle">Доля эскалаций по вероятности класса B</p>
+    <p class="csub">20 групп train-алертов по предсказанной вероятности класса B: доля выходит на плато ~10% и ~30%, то есть класс бинарный.</p>
+    <div class="chart" id="c-lat"></div>
+    <details><summary>Таблица</summary><div class="tablewrap" id="t-lat"></div></details>
+  </div>
+  <p class="reveal">Внутри одного класса сигнал очень слабый (AUC ~0.515). Почти вся предсказательная сила задачи в том, чтобы узнать класс клиента. Если бы класс был известен идеально, это дало бы AUC ≈ 0.66.</p>
+</section>
+
+<section id="features">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">08</span> // Признаки и модель</p>
+    <h2>Каждая идея из EDA стала группой признаков.</h2>
+  </div>
+  <div class="feat">
+    <div class="card reveal"><span class="tag rule">Профиль</span><h4>8 сегментов</h4><p>n и доли, mean, std, медиана, q10, q90, <b>min</b>, max.</p></div>
+    <div class="card reveal"><span class="tag rule">Уровни</span><h4>Относительно клиента</h4><p>Среднее сегмента минус уровень клиента, попарные разности, отношения разбросов.</p></div>
+    <div class="card reveal"><span class="tag learn">Класс</span><h4>Скрытый класс</h4><p>Счётчики полос у порога, вероятность класса B, якорная метка.</p></div>
+    <div class="card reveal"><span class="tag io">Время</span><h4>Время и потоки</h4><p>Окна 1–180 дней, всплеск, интервалы, net-flow, транзит «вход → выход».</p></div>
+    <div class="card reveal"><span class="tag io">Формы</span><h4>Гистограммы</h4><p>Доли сумм внутри сегментов по глобальным квантилям.</p></div>
+  </div>
+
+  <div class="resgrid">
+    <div class="card reveal">
+      <p class="ctitle">Как рос CV ROC-AUC</p>
+      <p class="csub">Средний OOF AUC по 3 повторам CV, каждый шаг на одних и тех же фолдах.</p>
+      <ol class="rev" id="rev"></ol>
+    </div>
+    <div class="card bigscore reveal">
+      <div>
+        <p class="ctitle">Итоговый CV</p>
+        <div class="big grad-text">0.6643</div>
+        <p class="cap">Бленд рангов LightGBM, CatBoost и XGBoost. Бейзлайн на обычных агрегатах давал 0.637.</p>
+      </div>
+      <div class="callout" style="margin:0"><span class="note-label">ПРОЧИТАЙТЕ ДО ЦИФР</span>Все числа — OOF ROC-AUC на повторной CV, а не на скрытом тесте. На тесте из 6 000 алертов стандартная ошибка AUC около <b>±0.008</b>, поэтому разница в тысячных между моделями — шум. Adversarial AUC train/test = 0.500, так что CV — честная оценка.</div>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card reveal">
+      <p class="ctitle">Модели на одинаковых фолдах</p>
+      <p class="csub">Фиксированное число итераций, 3 seed'а на фолд.</p>
+      <div class="chart" id="c-models"></div>
+    </div>
+    <div class="card reveal">
+      <p class="ctitle">Ablation: убираем группу признаков</p>
+      <p class="csub">До добавления скрытого класса. Профиль и минимумы — основа.</p>
+      <div class="chart" id="c-ablation"></div>
+    </div>
+  </div>
+  <div class="card reveal">
     <p class="ctitle">Топ-15 признаков по gain</p>
-    <p class="csub">LightGBM на всём train, доля суммарного gain.</p>
+    <p class="csub">LightGBM на всём train, доля суммарного gain. Два признака скрытого класса дают больше половины.</p>
     <div class="chart" id="c-imp"></div>
   </div>
-</div>
-<p><b>Валидация:</b> одинаковые stratified 5-fold × 3 повтора для всех моделей. Число итераций зафиксировано заранее, без ранней остановки на валидационном фолде. Гиперпараметры подобраны через Optuna, и десятки конфигураций сходятся к плато ~0.664, то есть результат устойчив. Тестовый прогноз — среднее рангов 135 фолдовых моделей. Ноутбук воспроизводит сабмит побайтово.</p>
+  <p class="reveal"><b>Валидация:</b> одинаковые stratified 5-fold × 3 повтора для всех моделей. Число итераций зафиксировано заранее, без ранней остановки на валидационном фолде. Гиперпараметры подобраны через Optuna, и десятки конфигураций сходятся к плато ~0.664, то есть результат устойчив. Тестовый прогноз — среднее рангов 135 фолдовых моделей. Ноутбук воспроизводит сабмит побайтово.</p>
+</section>
 
-<h2 id="conclusion"><span class="sec-num">9</span>Выводы</h2>
-<ul class="clean">
-  <li>Эскалацию почти полностью определяет <b>скрытый класс клиента</b>: A ≈ 10%, B ≈ 30%.</li>
-  <li>Класс выдают <b>классовые минимумы сумм</b>: одна операция у порога однозначно определяет класс у 6 045 клиентов, противоречий ноль.</li>
-  <li>У остальных клиентов класс восстанавливается по форме профиля (разбросы и разности уровней между сегментами) с AUC 0.955, без использования таргета.</li>
-  <li>Абсолютные суммы, ритм активности и «всплеск» перед сигналом почти не различают классы. Важен <b>профиль относительно самого клиента</b>.</li>
-  <li>Итог: CV ROC-AUC <b>0.6643</b> против 0.637 у бейзлайна. Остаток сигнала внутри классов слабый, так что результат близок к потолку, который допускают данные.</li>
-</ul>
-<footer>Данные синтетические и подготовлены организаторами хакатона. Все графики построены по train (метки) и по транзакциям train + test (без меток). Расчёты: Python, pandas, LightGBM, CatBoost, XGBoost.</footer>
-</div>
+<section id="debrief">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">09</span> // Честный разбор</p>
+    <h2>Что сработало, что нет и что дальше.</h2>
+  </div>
+  <div class="grid3 deb">
+    <div class="card ok reveal"><h3><span class="mk">+</span>Что сработало</h3><ul>
+      <li>Поиск механизма генератора: минимумы сегментов дали +0.010, скрытый класс ещё +0.009 AUC.</li>
+      <li>Классификатор класса без таргета: OOF AUC 0.955 на 5 738 якорях.</li>
+      <li>Дисциплина CV: одинаковые фолды, фиксированные итерации, бленд рангов, воспроизводимый ноутбук.</li>
+    </ul></div>
+    <div class="card no reveal"><h3><span class="mk">−</span>Что нет</h3><ul>
+      <li>Внутри класса сигнал слабый (AUC ≈ 0.515): время, потоки и гистограммы почти ничего не добавляют.</li>
+      <li>Ранняя остановка завышала CV (0.6648 против честных 0.6641), поэтому мы от неё отказались.</li>
+      <li>Нейросеть на последовательностях не делали: сигнал в классе клиента, а не в порядке операций.</li>
+    </ul></div>
+    <div class="card next reveal"><h3><span class="mk">→</span>Что дальше</h3><ul>
+      <li>Нейросеть на последовательностях транзакций как декоррелированный член бленда.</li>
+      <li>Вложенная CV для порогов классов, чтобы оценка была строго честной.</li>
+      <li>Калибровка вероятностей, если модель пойдёт в работу с порогом решения.</li>
+    </ul></div>
+  </div>
+</section>
+
+<section id="conclusion">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">10</span> // Выводы</p>
+    <h2>Главное в пяти пунктах.</h2>
+  </div>
+  <ol class="concl">
+    <li class="reveal">Эскалацию почти полностью определяет <b>скрытый класс клиента</b>: A ≈ 10%, B ≈ 30%.</li>
+    <li class="reveal">Класс выдают <b>классовые минимумы сумм</b>: одна операция у порога однозначно определяет класс у 6 045 клиентов, противоречий ноль.</li>
+    <li class="reveal">У остальных клиентов класс восстанавливается по форме профиля (разбросы и разности уровней между сегментами) с AUC 0.955, без использования таргета.</li>
+    <li class="reveal">Абсолютные суммы, ритм активности и «всплеск» перед сигналом почти не различают классы. Важен <b>профиль относительно самого клиента</b>.</li>
+    <li class="reveal">Итог: CV ROC-AUC <b>0.6643</b> против 0.637 у бейзлайна. Остаток сигнала внутри классов слабый, так что результат близок к потолку, который допускают данные.</li>
+  </ol>
+</section>
+
+<section id="team">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">11</span> // Команда</p>
+    <h2>Кто сделал этот проект.</h2>
+  </div>
+  <div class="grid3 team" id="team-grid"></div>
+</section>
+
+<section id="deliverables">
+  <div class="sh reveal">
+    <p class="eyebrow"><span class="num">12</span> // Deliverables</p>
+    <h2>Всё для проверки — в одном репозитории.</h2>
+  </div>
+  <div class="deliv">
+    <a class="dl reveal" href="https://github.com/grxt777/west-test" target="_blank" rel="noopener"><b>GitHub-репозиторий</b><code>grxt777/west-test</code><span class="go">ОТКРЫТЬ <span>→</span></span></a>
+    <a class="dl reveal" href="https://github.com/grxt777/west-test/blob/main/solution.ipynb" target="_blank" rel="noopener"><b>Ноутбук</b><code>solution.ipynb · Restart &amp; Run All</code><span class="go">ОТКРЫТЬ <span>→</span></span></a>
+    <a class="dl reveal" href="https://github.com/grxt777/west-test/blob/main/team_F2F427DD.csv" target="_blank" rel="noopener"><b>Сабмит</b><code>team_F2F427DD.csv · 6 000 строк</code><span class="go">ОТКРЫТЬ <span>→</span></span></a>
+    <a class="dl reveal" href="https://github.com/grxt777/west-test/blob/main/requirements.txt" target="_blank" rel="noopener"><b>Окружение</b><code>requirements.txt · точные версии</code><span class="go">ОТКРЫТЬ <span>→</span></span></a>
+  </div>
+</section>
+
+<footer>
+  <span>Данные синтетические и подготовлены организаторами хакатона. Все графики построены по train (метки) и по транзакциям train + test (без меток). Python, pandas, LightGBM, CatBoost, XGBoost.</span>
+  <span class="mono">AML // ESCALATION · TEAM F2F427DD</span>
+</footer>
+</main>
 
 <script id="viz-data" type="application/json">{"kpi": {"n_train": 14000, "n_test": 6000, "n_tx": 10015238, "pos": 2405, "rate": 0.1718, "tx_med": 461}, "monthly": [{"m": "2025-01", "rate": 0.1703, "n": 505}, {"m": "2025-02", "rate": 0.1857, "n": 517}, {"m": "2025-03", "rate": 0.1762, "n": 505}, {"m": "2025-04", "rate": 0.2, "n": 470}, {"m": "2025-05", "rate": 0.1652, "n": 466}, {"m": "2025-06", "rate": 0.1429, "n": 497}, {"m": "2025-07", "rate": 0.1635, "n": 746}, {"m": "2025-08", "rate": 0.1701, "n": 735}, {"m": "2025-09", "rate": 0.1394, "n": 696}, {"m": "2025-10", "rate": 0.1717, "n": 856}, {"m": "2025-11", "rate": 0.1544, "n": 790}, {"m": "2025-12", "rate": 0.1752, "n": 805}, {"m": "2026-01", "rate": 0.1643, "n": 767}, {"m": "2026-02", "rate": 0.1605, "n": 704}, {"m": "2026-03", "rate": 0.1992, "n": 778}, {"m": "2026-04", "rate": 0.2122, "n": 608}, {"m": "2026-05", "rate": 0.1701, "n": 635}, {"m": "2026-06", "rate": 0.1435, "n": 634}, {"m": "2026-07", "rate": 0.1756, "n": 427}, {"m": "2026-08", "rate": 0.179, "n": 419}, {"m": "2026-09", "rate": 0.1747, "n": 395}, {"m": "2026-10", "rate": 0.1751, "n": 337}, {"m": "2026-11", "rate": 0.1994, "n": 331}, {"m": "2026-12", "rate": 0.191, "n": 377}], "daily": [{"d": 0, "n": 812005}, {"d": 1, "n": 19824}, {"d": 2, "n": 20281}, {"d": 3, "n": 20803}, {"d": 4, "n": 20980}, {"d": 5, "n": 22211}, {"d": 6, "n": 21987}, {"d": 7, "n": 22363}, {"d": 8, "n": 22891}, {"d": 9, "n": 22989}, {"d": 10, "n": 23660}, {"d": 11, "n": 24440}, {"d": 12, "n": 25022}, {"d": 13, "n": 25158}, {"d": 14, "n": 25551}, {"d": 15, "n": 25788}, {"d": 16, "n": 26649}, {"d": 17, "n": 26989}, {"d": 18, "n": 27668}, {"d": 19, "n": 27893}, {"d": 20, "n": 28477}, {"d": 21, "n": 29127}, {"d": 22, "n": 29301}, {"d": 23, "n": 30295}, {"d": 24, "n": 30667}, {"d": 25, "n": 31012}, {"d": 26, "n": 31601}, {"d": 27, "n": 32049}, {"d": 28, "n": 32596}, {"d": 29, "n": 32868}, {"d": 30, "n": 33483}, {"d": 31, "n": 33836}, {"d": 32, "n": 34309}, {"d": 33, "n": 34810}, {"d": 34, "n": 35486}, {"d": 35, "n": 36141}, {"d": 36, "n": 36521}, {"d": 37, "n": 36842}, {"d": 38, "n": 37592}, {"d": 39, "n": 37852}, {"d": 40, "n": 38394}, {"d": 41, "n": 39130}, {"d": 42, "n": 39619}, {"d": 43, "n": 40147}, {"d": 44, "n": 40892}, {"d": 45, "n": 41256}, {"d": 46, "n": 41912}, {"d": 47, "n": 42107}, {"d": 48, "n": 42509}, {"d": 49, "n": 43001}, {"d": 50, "n": 43539}, {"d": 51, "n": 43484}, {"d": 52, "n": 44817}, {"d": 53, "n": 45404}, {"d": 54, "n": 45660}, {"d": 55, "n": 46256}, {"d": 56, "n": 46794}, {"d": 57, "n": 47198}, {"d": 58, "n": 47533}, {"d": 59, "n": 48070}, {"d": 60, "n": 48397}, {"d": 61, "n": 48591}, {"d": 62, "n": 49238}, {"d": 63, "n": 49494}, {"d": 64, "n": 50523}, {"d": 65, "n": 50633}, {"d": 66, "n": 50792}, {"d": 67, "n": 51301}, {"d": 68, "n": 51960}, {"d": 69, "n": 52081}, {"d": 70, "n": 52691}, {"d": 71, "n": 53073}, {"d": 72, "n": 53701}, {"d": 73, "n": 53947}, {"d": 74, "n": 54169}, {"d": 75, "n": 54303}, {"d": 76, "n": 54746}, {"d": 77, "n": 55217}, {"d": 78, "n": 56437}, {"d": 79, "n": 56511}, {"d": 80, "n": 56349}, {"d": 81, "n": 56611}, {"d": 82, "n": 56985}, {"d": 83, "n": 57707}, {"d": 84, "n": 57833}, {"d": 85, "n": 58495}, {"d": 86, "n": 58028}, {"d": 87, "n": 58959}, {"d": 88, "n": 59027}, {"d": 89, "n": 59266}, {"d": 90, "n": 59217}, {"d": 91, "n": 60120}, {"d": 92, "n": 59973}, {"d": 93, "n": 60050}, {"d": 94, "n": 61086}, {"d": 95, "n": 60381}, {"d": 96, "n": 60964}, {"d": 97, "n": 61527}, {"d": 98, "n": 61580}, {"d": 99, "n": 61311}, {"d": 100, "n": 62046}, {"d": 101, "n": 62132}, {"d": 102, "n": 61970}, {"d": 103, "n": 62433}, {"d": 104, "n": 62868}, {"d": 105, "n": 62720}, {"d": 106, "n": 62598}, {"d": 107, "n": 63115}, {"d": 108, "n": 63348}, {"d": 109, "n": 63474}, {"d": 110, "n": 63411}, {"d": 111, "n": 63330}, {"d": 112, "n": 63517}, {"d": 113, "n": 63900}, {"d": 114, "n": 63377}, {"d": 115, "n": 64050}, {"d": 116, "n": 63706}, {"d": 117, "n": 64333}, {"d": 118, "n": 64631}, {"d": 119, "n": 64145}, {"d": 120, "n": 64754}, {"d": 121, "n": 64326}, {"d": 122, "n": 64008}, {"d": 123, "n": 64457}, {"d": 124, "n": 64553}, {"d": 125, "n": 64531}, {"d": 126, "n": 64556}, {"d": 127, "n": 64867}, {"d": 128, "n": 64459}, {"d": 129, "n": 64819}, {"d": 130, "n": 64140}, {"d": 131, "n": 64461}, {"d": 132, "n": 64961}, {"d": 133, "n": 64218}, {"d": 134, "n": 64518}, {"d": 135, "n": 64282}, {"d": 136, "n": 63866}, {"d": 137, "n": 64282}, {"d": 138, "n": 64337}, {"d": 139, "n": 64234}, {"d": 140, "n": 63687}, {"d": 141, "n": 64256}, {"d": 142, "n": 63576}, {"d": 143, "n": 63690}, {"d": 144, "n": 64192}, {"d": 145, "n": 63588}, {"d": 146, "n": 63686}, {"d": 147, "n": 63113}, {"d": 148, "n": 63315}, {"d": 149, "n": 62793}, {"d": 150, "n": 63353}, {"d": 151, "n": 63148}, {"d": 152, "n": 62688}, {"d": 153, "n": 62654}, {"d": 154, "n": 62211}, {"d": 155, "n": 62022}, {"d": 156, "n": 62389}, {"d": 157, "n": 62100}, {"d": 158, "n": 61572}, {"d": 159, "n": 61535}, {"d": 160, "n": 61239}, {"d": 161, "n": 60961}, {"d": 162, "n": 60876}, {"d": 163, "n": 60395}, {"d": 164, "n": 60332}, {"d": 165, "n": 60199}, {"d": 166, "n": 60287}, {"d": 167, "n": 59796}, {"d": 168, "n": 59834}, {"d": 169, "n": 59096}, {"d": 170, "n": 59340}, {"d": 171, "n": 58855}, {"d": 172, "n": 58741}, {"d": 173, "n": 58483}, {"d": 174, "n": 58542}, {"d": 175, "n": 58053}, {"d": 176, "n": 57595}, {"d": 177, "n": 57603}, {"d": 178, "n": 57076}, {"d": 179, "n": 42730}], "burst": [{"s": 0, "n": 40440}, {"s": 10, "n": 44879}, {"s": 20, "n": 45241}, {"s": 30, "n": 44756}, {"s": 40, "n": 44868}, {"s": 50, "n": 44547}, {"s": 60, "n": 44584}, {"s": 70, "n": 44651}, {"s": 80, "n": 45080}, {"s": 90, "n": 44815}, {"s": 100, "n": 44555}, {"s": 110, "n": 44866}, {"s": 120, "n": 44700}, {"s": 130, "n": 44982}, {"s": 140, "n": 44996}, {"s": 150, "n": 44933}, {"s": 160, "n": 44904}, {"s": 170, "n": 26752}, {"s": 180, "n": 2}, {"s": 190, "n": 0}, {"s": 200, "n": 1}, {"s": 210, "n": 1}, {"s": 220, "n": 3}, {"s": 230, "n": 1}, {"s": 240, "n": 3}, {"s": 250, "n": 4}, {"s": 260, "n": 2}, {"s": 270, "n": 2}, {"s": 280, "n": 5}, {"s": 290, "n": 3}, {"s": 300, "n": 1}, {"s": 310, "n": 1}, {"s": 320, "n": 2}, {"s": 330, "n": 1}, {"s": 340, "n": 4}, {"s": 350, "n": 4}, {"s": 360, "n": 4}, {"s": 370, "n": 1}, {"s": 380, "n": 0}, {"s": 390, "n": 3}, {"s": 400, "n": 0}, {"s": 410, "n": 4}, {"s": 420, "n": 0}, {"s": 430, "n": 1}, {"s": 440, "n": 2}, {"s": 450, "n": 1}, {"s": 460, "n": 4}, {"s": 470, "n": 3}, {"s": 480, "n": 2}, {"s": 490, "n": 1}, {"s": 500, "n": 1}, {"s": 510, "n": 2}, {"s": 520, "n": 5}, {"s": 530, "n": 3}, {"s": 540, "n": 2}, {"s": 550, "n": 0}, {"s": 560, "n": 1}, {"s": 570, "n": 2}, {"s": 580, "n": 1}, {"s": 590, "n": 0}], "burst_share": 0.0789, "hour": [{"h": 0, "p": 0.0389}, {"h": 1, "p": 0.0385}, {"h": 2, "p": 0.0384}, {"h": 3, "p": 0.0385}, {"h": 4, "p": 0.0385}, {"h": 5, "p": 0.0385}, {"h": 6, "p": 0.0384}, {"h": 7, "p": 0.0383}, {"h": 8, "p": 0.0384}, {"h": 9, "p": 0.0384}, {"h": 10, "p": 0.0385}, {"h": 11, "p": 0.0383}, {"h": 12, "p": 0.0384}, {"h": 13, "p": 0.0385}, {"h": 14, "p": 0.0388}, {"h": 15, "p": 0.0383}, {"h": 16, "p": 0.0383}, {"h": 17, "p": 0.0383}, {"h": 18, "p": 0.0382}, {"h": 19, "p": 0.0382}, {"h": 20, "p": 0.0383}, {"h": 21, "p": 0.0383}, {"h": 22, "p": 0.0383}, {"h": 23, "p": 0.1167}], "segs": [{"seg": "karta_in", "n": 4127912, "share": 0.4122, "mean": -0.536, "std": 0.659}, {"seg": "karta_out", "n": 1255874, "share": 0.1254, "mean": -0.072, "std": 0.844}, {"seg": "bank_otkazmasi_in", "n": 2932597, "share": 0.2928, "mean": 0.081, "std": 1.116}, {"seg": "bank_otkazmasi_out", "n": 1019440, "share": 0.1018, "mean": 0.324, "std": 1.156}, {"seg": "naqd_in", "n": 478272, "share": 0.0478, "mean": 0.455, "std": 0.759}, {"seg": "naqd_out", "n": 155596, "share": 0.0155, "mean": 0.791, "std": 0.871}, {"seg": "xalqaro_in", "n": 34916, "share": 0.0035, "mean": 1.939, "std": 1.051}, {"seg": "xalqaro_out", "n": 10631, "share": 0.0011, "mean": 2.168, "std": 1.146}], "amt_hist": [{"x": -2.9, "p0": 0.00169, "p1": 0.00163}, {"x": -2.7, "p0": 0.00112, "p1": 0.00128}, {"x": -2.5, "p0": 0.00158, "p1": 0.00175}, {"x": -2.3, "p0": 0.0026, "p1": 0.00316}, {"x": -2.1, "p0": 0.00801, "p1": 0.00853}, {"x": -1.9, "p0": 0.01033, "p1": 0.01135}, {"x": -1.7, "p0": 0.01698, "p1": 0.01912}, {"x": -1.5, "p0": 0.02757, "p1": 0.03051}, {"x": -1.3, "p0": 0.04184, "p1": 0.04572}, {"x": -1.1, "p0": 0.05931, "p1": 0.06293}, {"x": -0.9, "p0": 0.07545, "p1": 0.07882}, {"x": -0.7, "p0": 0.08683, "p1": 0.08896}, {"x": -0.5, "p0": 0.09203, "p1": 0.09379}, {"x": -0.3, "p0": 0.09027, "p1": 0.09042}, {"x": -0.1, "p0": 0.08368, "p1": 0.08316}, {"x": 0.1, "p0": 0.07445, "p1": 0.07336}, {"x": 0.3, "p0": 0.06415, "p1": 0.06247}, {"x": 0.5, "p0": 0.05385, "p1": 0.05243}, {"x": 0.7, "p0": 0.04496, "p1": 0.04315}, {"x": 0.9, "p0": 0.03675, "p1": 0.03486}, {"x": 1.1, "p0": 0.02974, "p1": 0.02793}, {"x": 1.3, "p0": 0.02368, "p1": 0.02197}, {"x": 1.5, "p0": 0.01853, "p1": 0.01683}, {"x": 1.7, "p0": 0.01422, "p1": 0.01248}, {"x": 1.9, "p0": 0.01079, "p1": 0.00936}, {"x": 2.1, "p0": 0.00814, "p1": 0.00692}, {"x": 2.3, "p0": 0.00601, "p1": 0.00499}, {"x": 2.5, "p0": 0.00438, "p1": 0.00371}, {"x": 2.7, "p0": 0.00321, "p1": 0.00253}, {"x": 2.9, "p0": 0.00231, "p1": 0.0018}, {"x": 3.1, "p0": 0.00166, "p1": 0.00125}, {"x": 3.3, "p0": 0.00117, "p1": 0.00091}, {"x": 3.5, "p0": 0.00084, "p1": 0.00063}, {"x": 3.7, "p0": 0.00061, "p1": 0.00041}, {"x": 3.9, "p0": 0.00042, "p1": 0.00032}, {"x": 4.1, "p0": 0.00031, "p1": 0.00022}, {"x": 4.3, "p0": 0.0002, "p1": 0.00014}, {"x": 4.5, "p0": 0.00014, "p1": 9e-05}, {"x": 4.7, "p0": 0.0001, "p1": 5e-05}, {"x": 4.9, "p0": 7e-05, "p1": 5e-05}], "seg_med_by_y": [{"seg": "karta_in", "m0": -0.567, "m1": -0.603}, {"seg": "karta_out", "m0": -0.121, "m1": -0.128}, {"seg": "bank_otkazmasi_in", "m0": 0.06, "m1": -0.049}, {"seg": "bank_otkazmasi_out", "m0": 0.297, "m1": 0.149}, {"seg": "naqd_in", "m0": 0.395, "m1": 0.403}, {"seg": "naqd_out", "m0": 0.76, "m1": 0.72}], "corr": {"labels": ["karta_in", "karta_out", "bank_otkazmasi_in", "bank_otkazmasi_out", "naqd_in", "naqd_out"], "m": [[1.0, 0.84, 0.84, 0.76, 0.72, 0.65], [0.84, 1.0, 0.73, 0.73, 0.66, 0.63], [0.84, 0.73, 1.0, 0.88, 0.75, 0.68], [0.76, 0.73, 0.88, 1.0, 0.67, 0.68], [0.72, 0.66, 0.75, 0.67, 1.0, 0.71], [0.65, 0.63, 0.68, 0.68, 0.71, 1.0]]}, "floor_bank_in": [{"x": 0.0, "n": 2545, "A": 2545, "B": 0, "rate": 0.089}, {"x": 0.005, "n": 2572, "A": 2572, "B": 0, "rate": 0.111}, {"x": 0.01, "n": 2105, "A": 2105, "B": 0, "rate": 0.106}, {"x": 0.015, "n": 662, "A": 78, "B": 421, "rate": 0.254}, {"x": 0.02, "n": 1348, "A": 75, "B": 938, "rate": 0.293}, {"x": 0.025, "n": 1315, "A": 50, "B": 940, "rate": 0.273}, {"x": 0.03, "n": 1415, "A": 66, "B": 976, "rate": 0.318}, {"x": 0.035, "n": 331, "A": 60, "B": 191, "rate": 0.284}, {"x": 0.04, "n": 146, "A": 71, "B": 40, "rate": 0.194}, {"x": 0.045, "n": 143, "A": 67, "B": 35, "rate": 0.162}, {"x": 0.05, "n": 142, "A": 63, "B": 46, "rate": 0.21}, {"x": 0.055, "n": 170, "A": 81, "B": 46, "rate": 0.226}, {"x": 0.06, "n": 170, "A": 84, "B": 48, "rate": 0.138}, {"x": 0.065, "n": 159, "A": 73, "B": 47, "rate": 0.163}, {"x": 0.07, "n": 114, "A": 47, "B": 38, "rate": 0.154}, {"x": 0.075, "n": 184, "A": 79, "B": 51, "rate": 0.262}, {"x": 0.08, "n": 177, "A": 81, "B": 57, "rate": 0.18}, {"x": 0.085, "n": 157, "A": 75, "B": 44, "rate": 0.2}, {"x": 0.09, "n": 151, "A": 78, "B": 35, "rate": 0.184}, {"x": 0.095, "n": 172, "A": 76, "B": 48, "rate": 0.187}], "floor_karta_out": [{"x": 0.0, "n": 213, "A": 0, "B": 213, "rate": 0.225}, {"x": 0.01, "n": 211, "A": 0, "B": 211, "rate": 0.343}, {"x": 0.02, "n": 218, "A": 0, "B": 218, "rate": 0.352}, {"x": 0.03, "n": 236, "A": 0, "B": 236, "rate": 0.338}, {"x": 0.04, "n": 200, "A": 0, "B": 200, "rate": 0.299}, {"x": 0.05, "n": 235, "A": 0, "B": 235, "rate": 0.287}, {"x": 0.06, "n": 228, "A": 0, "B": 228, "rate": 0.336}, {"x": 0.07, "n": 225, "A": 0, "B": 225, "rate": 0.284}, {"x": 0.08, "n": 228, "A": 0, "B": 228, "rate": 0.253}, {"x": 0.09, "n": 288, "A": 0, "B": 288, "rate": 0.289}, {"x": 0.1, "n": 276, "A": 0, "B": 276, "rate": 0.267}, {"x": 0.11, "n": 294, "A": 0, "B": 294, "rate": 0.328}, {"x": 0.12, "n": 338, "A": 0, "B": 338, "rate": 0.339}, {"x": 0.13, "n": 281, "A": 0, "B": 281, "rate": 0.328}, {"x": 0.14, "n": 454, "A": 135, "B": 214, "rate": 0.196}, {"x": 0.15, "n": 505, "A": 187, "B": 215, "rate": 0.216}, {"x": 0.16, "n": 417, "A": 224, "B": 79, "rate": 0.172}, {"x": 0.17, "n": 430, "A": 216, "B": 82, "rate": 0.151}, {"x": 0.18, "n": 396, "A": 202, "B": 82, "rate": 0.184}, {"x": 0.19, "n": 451, "A": 230, "B": 101, "rate": 0.166}, {"x": 0.2, "n": 467, "A": 240, "B": 83, "rate": 0.159}, {"x": 0.21, "n": 441, "A": 213, "B": 95, "rate": 0.157}, {"x": 0.22, "n": 478, "A": 247, "B": 93, "rate": 0.138}, {"x": 0.23, "n": 506, "A": 255, "B": 117, "rate": 0.204}, {"x": 0.24, "n": 551, "A": 290, "B": 118, "rate": 0.154}, {"x": 0.25, "n": 532, "A": 271, "B": 115, "rate": 0.157}, {"x": 0.26, "n": 530, "A": 285, "B": 111, "rate": 0.136}, {"x": 0.27, "n": 552, "A": 301, "B": 106, "rate": 0.155}, {"x": 0.28, "n": 558, "A": 273, "B": 113, "rate": 0.158}, {"x": 0.29, "n": 535, "A": 299, "B": 93, "rate": 0.156}], "class_floor": [{"seg": "karta_in", "A": 0.0357, "B": 0.0}, {"seg": "karta_out", "A": 0.1431, "B": 0.0}, {"seg": "bank_otkazmasi_in", "A": 0.0, "B": 0.0178}, {"seg": "bank_otkazmasi_out", "A": 0.0, "B": 0.0318}, {"seg": "naqd_in", "A": 0.0, "B": 0.0407}, {"seg": "naqd_out", "A": 0.0, "B": 0.1276}, {"seg": "xalqaro_in", "A": 0.0, "B": 0.0995}, {"seg": "xalqaro_out", "A": 0.4545, "B": 0.0}], "det": {"nA": 3694, "nB": 2351, "conf": 0, "rateA": 0.102, "rateB": 0.306, "rateU": 0.168, "nU": 13955}, "lat_curve": [{"p": 0.009, "rate": 0.103, "n": 700}, {"p": 0.021, "rate": 0.109, "n": 700}, {"p": 0.033, "rate": 0.11, "n": 700}, {"p": 0.045, "rate": 0.09, "n": 700}, {"p": 0.062, "rate": 0.091, "n": 700}, {"p": 0.081, "rate": 0.101, "n": 700}, {"p": 0.106, "rate": 0.11, "n": 700}, {"p": 0.135, "rate": 0.11, "n": 700}, {"p": 0.176, "rate": 0.101, "n": 700}, {"p": 0.233, "rate": 0.104, "n": 700}, {"p": 0.308, "rate": 0.123, "n": 700}, {"p": 0.414, "rate": 0.137, "n": 700}, {"p": 0.547, "rate": 0.174, "n": 700}, {"p": 0.691, "rate": 0.226, "n": 700}, {"p": 0.829, "rate": 0.249, "n": 700}, {"p": 0.918, "rate": 0.3, "n": 700}, {"p": 0.964, "rate": 0.289, "n": 700}, {"p": 0.985, "rate": 0.306, "n": 700}, {"p": 0.995, "rate": 0.299, "n": 700}, {"p": 0.999, "rate": 0.304, "n": 700}], "progress": [{"k": "Бейзлайн: 140 агрегатов", "v": 0.637}, {"k": "+ профиль по 8 сегментам", "v": 0.6447}, {"k": "+ минимумы сегментов", "v": 0.6555}, {"k": "+ скрытый класс", "v": 0.6648}, {"k": "Честно: фикс. итерации + тюнинг", "v": 0.6641}, {"k": "Бленд LGB + Cat + XGB", "v": 0.6643}], "models": [{"k": "Бленд (ранги)", "v": 0.6643}, {"k": "CatBoost", "v": 0.6642}, {"k": "LightGBM", "v": 0.6641}, {"k": "XGBoost", "v": 0.6631}, {"k": "LightGBM DART", "v": 0.6615}, {"k": "Логистическая регрессия", "v": 0.6461}], "ablation": [{"k": "все признаки", "v": 0.6555}, {"k": "без потоков", "v": 0.6551}, {"k": "без гистограмм", "v": 0.6549}, {"k": "без времени", "v": 0.6547}, {"k": "без минимумов", "v": 0.6447}, {"k": "без профиля", "v": 0.6225}], "imp": [{"k": "lat_comb", "v": 0.3492}, {"k": "lat_p", "v": 0.1921}, {"k": "d_bank_otkazmasi_out__naqd_in", "v": 0.0415}, {"k": "d_bank_otkazmasi_in__naqd_in", "v": 0.0364}, {"k": "d_karta_out__bank_otkazmasi_out", "v": 0.0267}, {"k": "lat_anchor", "v": 0.0163}, {"k": "bank_minus_card", "v": 0.0113}, {"k": "burst_out", "v": 0.0098}, {"k": "std_naqd_out", "v": 0.0063}, {"k": "rel_lvl_nonbank_bank_otkazmasi_out", "v": 0.0061}, {"k": "cf_w120", "v": 0.0057}, {"k": "h_naqd_out_6", "v": 0.0047}, {"k": "rel_lvl_card_bank_otkazmasi_in", "v": 0.0047}, {"k": "std_bank_otkazmasi_in", "v": 0.0045}, {"k": "d_bank_otkazmasi_out__naqd_out", "v": 0.0045}]}</script>
 <script>
 (function () {
-  const D = JSON.parse(document.getElementById("viz-data").textContent);
+  const TEAM = [
+    { name: 'Участник 1', role: 'Капитан · ML и модели', did: ['Признаки профиля и скрытого класса', 'GBDT-ансамбль и валидация'] },
+    { name: 'Участник 2', role: 'EDA и сайт', did: ['Разведочный анализ транзакций', 'EDA-сайт и визуализации'] },
+    { name: 'Участник 3', role: 'Валидация и ноутбук', did: ['Воспроизводимый ноутбук и сабмит', 'Проверка формата и CV'] },
+  ];
+
+  const D = JSON.parse(document.getElementById('viz-data').textContent);
   const NS = 'http://www.w3.org/2000/svg';
-  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const root = document.documentElement;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const css = n => getComputedStyle(root).getPropertyValue(n).trim();
+  const isDark = () => root.getAttribute('data-theme') !== 'light';
   const fmt = (v, d = 3) => (v == null ? '—' : Number(v).toFixed(d));
   const pct = (v, d = 1) => (v * 100).toFixed(d) + '%';
   const nf = new Intl.NumberFormat('ru-RU');
+  const K = D.kpi, dt = D.det;
 
-  // theme toggle
+  // ---------- theme ----------
   const btn = document.getElementById('themebtn');
+  const syncBtn = () => { btn.textContent = isDark() ? 'СВЕТЛАЯ' : 'ТЁМНАЯ'; };
+  syncBtn();
   btn.addEventListener('click', () => {
-    const cur = document.documentElement.getAttribute('data-theme');
-    const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-    document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
-    renderAll();
+    root.setAttribute('data-theme', isDark() ? 'light' : 'dark');
+    try { localStorage.setItem('aml-theme', root.getAttribute('data-theme')); } catch (e) {}
+    syncBtn(); refreshColors(); renderAll();
   });
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
 
   function el(tag, attrs, parent) {
     const e = document.createElementNS(NS, tag);
@@ -307,13 +697,12 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     const show = ev => {
       const r = host.getBoundingClientRect();
       const [x, y] = getXY ? getXY(r) : [ev.clientX - r.left, ev.clientY - r.top];
-      t.innerHTML = html; t.style.left = Math.min(Math.max(x, 60), r.width - 60) + 'px'; t.style.top = y + 'px'; t.classList.add('on');
+      t.innerHTML = html; t.style.left = Math.min(Math.max(x, 70), r.width - 70) + 'px'; t.style.top = y + 'px'; t.classList.add('on');
     };
     node.addEventListener('mousemove', show); node.addEventListener('mouseenter', show);
     node.addEventListener('mouseleave', () => t.classList.remove('on'));
     node.addEventListener('touchstart', e => { show(e.touches[0]); }, { passive: true });
   }
-  // rounded-top bar path (vertical) anchored to baseline
   function vbar(x, y0, w, y1, r) {
     const top = Math.min(y0, y1), h = Math.abs(y0 - y1); r = Math.min(r, w / 2, h);
     if (h <= 0) return '';
@@ -331,8 +720,12 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
     return out;
   }
+  function rng(seed) {
+    let s = seed;
+    return function () { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
 
-  // ---------- vertical columns (1 or 2 series side by side), optional reference line ----------
+  // ---------- vertical columns ----------
   function columns(id, rows, o) {
     const host = document.getElementById(id); host.querySelectorAll('svg').forEach(s => s.remove());
     const W = host.clientWidth || 600, H = o.h || 220, m = { l: 44, r: 12, t: 10, b: o.xlabelH || 28 };
@@ -342,6 +735,7 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     const ymin = o.ymin || 0;
     const iw = W - m.l - m.r, ih = H - m.t - m.b, band = iw / rows.length;
     const y = v => m.t + ih - (v - ymin) / (ymax - ymin) * ih;
+    const stagger = Math.min(40, 800 / rows.length);
     niceTicks(ymin, ymax, 4).forEach(v => {
       el('line', { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: css('--grid'), 'stroke-width': 1 }, svg);
       const t = el('text', { x: m.l - 6, y: y(v) + 4, 'text-anchor': 'end', 'font-size': 11, fill: css('--muted') }, svg); t.textContent = o.yfmt ? o.yfmt(v) : v;
@@ -353,7 +747,7 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
       keys.forEach((k, j) => {
         if (r[k] == null) return;
         const x = cx - gw / 2 + j * (bw + gap);
-        el('path', { d: vbar(x, y(ymin), bw, y(r[k]), Math.min(4, bw / 2)), fill: css(cols[j]) }, svg);
+        el('path', { d: vbar(x, y(ymin), bw, y(r[k]), Math.min(4, bw / 2)), fill: css(cols[j]), class: 'bar', style: `transition-delay:${Math.round(i * stagger + j * 60)}ms` }, svg);
       });
       const hit = el('rect', { x: m.l + band * i, y: m.t, width: band, height: ih, fill: 'transparent' }, svg);
       bindTip(host, hit, o.tip(r));
@@ -369,25 +763,27 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     });
     el('line', { x1: m.l, x2: W - m.r, y1: y(ymin), y2: y(ymin), stroke: css('--axis'), 'stroke-width': 1 }, svg);
     if (o.ref != null) {
-      el('line', { x1: m.l, x2: W - m.r, y1: y(o.ref), y2: y(o.ref), stroke: css('--ink-2'), 'stroke-width': 1.5 }, svg);
+      el('line', { x1: m.l, x2: W - m.r, y1: y(o.ref), y2: y(o.ref), stroke: css('--ink-2'), 'stroke-width': 1.5, 'stroke-dasharray': '5 4' }, svg);
       const t = el('text', { x: W - m.r, y: y(o.ref) - 6, 'text-anchor': 'end', 'font-size': 11, fill: css('--ink-2'), stroke: css('--surface'), 'stroke-width': 4, 'paint-order': 'stroke', 'stroke-linejoin': 'round' }, svg); t.textContent = o.refLabel;
     }
   }
 
-  // ---------- horizontal bars (single series) ----------
+  // ---------- horizontal bars ----------
   function hbars(id, rows, o) {
     const host = document.getElementById(id); host.querySelectorAll('svg').forEach(s => s.remove());
-    const W = host.clientWidth || 400, rowH = o.rowH || 26, lw = o.labelW || 150, m = { l: lw, r: 56, t: 4, b: 4 };
+    const W = host.clientWidth || 400, rowH = o.rowH || 26, lw = Math.min(o.labelW || 150, W * 0.42), m = { l: lw, r: 60, t: 4, b: 4 };
     const H = m.t + m.b + rows.length * rowH;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': o.aria || '' }, host);
     const lo = o.lo != null ? o.lo : Math.min(0, ...rows.map(r => r.v)), hi = o.hi != null ? o.hi : Math.max(0, ...rows.map(r => r.v));
-    const iw = W - m.l - m.r, x = v => m.l + (v - lo) / (hi - lo) * iw, x0 = x(o.base != null ? o.base : Math.max(lo, 0));
+    const base = o.base != null ? o.base : Math.max(lo, 0);
+    const iw = W - m.l - m.r, x = v => m.l + (v - lo) / (hi - lo) * iw, x0 = x(base);
     rows.forEach((r, i) => {
-      const yy = m.t + i * rowH, bh = Math.min(18, rowH - 8), by = yy + (rowH - bh) / 2;
-      const lab = el('text', { x: m.l - 8, y: yy + rowH / 2 + 4, 'text-anchor': 'end', 'font-size': 12, fill: css('--ink-2') }, svg); lab.textContent = r.k;
-      el('path', { d: hbar(x0, by, bh, x(r.v), 4), fill: css(r.color || o.color || '--s1') }, svg);
-      const pos = r.v >= (o.base != null ? o.base : 0);
-      const vt = el('text', { x: pos ? x(r.v) + 6 : x0 + 6, y: yy + rowH / 2 + 4, 'text-anchor': 'start', 'font-size': 12, fill: css('--ink'), 'font-variant-numeric': 'tabular-nums' }, svg);
+      const yy = m.t + i * rowH, bh = Math.min(18, rowH - 8), by = yy + (rowH - bh) / 2, pos = r.v >= base;
+      const lab = el('text', { x: m.l - 8, y: yy + rowH / 2 + 4, 'text-anchor': 'end', 'font-size': 12, fill: css('--ink-2') }, svg);
+      const maxc = Math.floor((lw - 12) / 6.6);
+      lab.textContent = r.k.length > maxc ? '…' + r.k.slice(r.k.length - maxc + 1) : r.k;
+      el('path', { d: hbar(x0, by, bh, x(r.v), 4), fill: css(r.color || o.color || '--s1'), class: 'hb' + (pos ? '' : ' neg'), style: `transition-delay:${i * 70}ms` }, svg);
+      const vt = el('text', { x: pos ? x(r.v) + 6 : x0 + 6, y: yy + rowH / 2 + 4, 'text-anchor': 'start', 'font-size': 12, fill: css('--ink'), 'font-variant-numeric': 'tabular-nums', class: 'vt', style: `transition-delay:${i * 70 + 500}ms` }, svg);
       vt.textContent = o.vfmt ? o.vfmt(r.v) : r.v;
       const hit = el('rect', { x: 0, y: yy, width: W, height: rowH, fill: 'transparent' }, svg);
       bindTip(host, hit, o.tip ? o.tip(r) : `${r.k}: ${o.vfmt ? o.vfmt(r.v) : r.v}`);
@@ -395,7 +791,7 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     el('line', { x1: x0, x2: x0, y1: m.t, y2: H - m.b, stroke: css('--axis'), 'stroke-width': 1 }, svg);
   }
 
-  // ---------- lines (1–2 series) with crosshair ----------
+  // ---------- lines ----------
   function lines(id, rows, o) {
     const host = document.getElementById(id); host.querySelectorAll('svg').forEach(s => s.remove());
     const W = host.clientWidth || 600, H = o.h || 240, m = { l: 48, r: 16, t: 12, b: 30 };
@@ -413,15 +809,15 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     });
     el('line', { x1: m.l, x2: W - m.r, y1: y(ymin), y2: y(ymin), stroke: css('--axis'), 'stroke-width': 1 }, svg);
     (o.refs || []).forEach(rf => {
-      el('line', { x1: m.l, x2: W - m.r, y1: y(rf.v), y2: y(rf.v), stroke: css('--ink-2'), 'stroke-width': 1, 'stroke-opacity': 0.6 }, svg);
+      el('line', { x1: m.l, x2: W - m.r, y1: y(rf.v), y2: y(rf.v), stroke: css('--ink-2'), 'stroke-width': 1, 'stroke-opacity': 0.6, 'stroke-dasharray': '5 4' }, svg);
       const t = el('text', { x: m.l + 6, y: y(rf.v) - 6, 'font-size': 11, fill: css('--ink-2'), stroke: css('--surface'), 'stroke-width': 4, 'paint-order': 'stroke', 'stroke-linejoin': 'round' }, svg); t.textContent = rf.label;
     });
     const cols = o.colors || ['--s1', '--s2'];
     o.keys.forEach((k, j) => {
       const d = rows.map((r, i) => (i ? 'L' : 'M') + x(r[o.x]).toFixed(1) + ',' + y(r[k]).toFixed(1)).join('');
-      if (o.area) el('path', { d: d + `L${x(rows[rows.length - 1][o.x])},${y(ymin)}L${x(rows[0][o.x])},${y(ymin)}Z`, fill: css(j ? '--s2-wash' : '--s1-wash') }, svg);
-      el('path', { d, fill: 'none', stroke: css(cols[j]), 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
-      if (o.dots) rows.forEach(r => el('circle', { cx: x(r[o.x]), cy: y(r[k]), r: 4, fill: css(cols[j]), stroke: css('--surface'), 'stroke-width': 2 }, svg));
+      el('path', { d: d + `L${x(rows[rows.length - 1][o.x])},${y(ymin)}L${x(rows[0][o.x])},${y(ymin)}Z`, fill: css(j ? '--s2-wash' : '--s1-wash'), class: 'ar' }, svg);
+      el('path', { d, fill: 'none', stroke: css(cols[j]), 'stroke-width': 2.2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', pathLength: 1, class: 'ln' }, svg);
+      if (o.dots) rows.forEach((r, i) => el('circle', { cx: x(r[o.x]), cy: y(r[k]), r: 4, fill: css(cols[j]), stroke: css('--surface'), 'stroke-width': 2, class: 'dot', style: `transition-delay:${Math.round(300 + i * 1500 / rows.length)}ms` }, svg));
     });
     const cross = el('line', { y1: m.t, y2: m.t + ih, stroke: css('--axis'), 'stroke-width': 1, opacity: 0 }, svg);
     const t = tipFor(host);
@@ -431,7 +827,7 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
       let best = 0, bd = 1e9; rows.forEach((row, i) => { const dd = Math.abs(x(row[o.x]) - sx); if (dd < bd) { bd = dd; best = i; } });
       const row = rows[best], px = x(row[o.x]);
       cross.setAttribute('x1', px); cross.setAttribute('x2', px); cross.setAttribute('opacity', 1);
-      t.innerHTML = o.tip(row); t.style.left = Math.min(Math.max(px * r.width / W, 70), r.width - 70) + 'px'; t.style.top = (m.t + 10) + 'px'; t.classList.add('on');
+      t.innerHTML = o.tip(row); t.style.left = Math.min(Math.max(px * r.width / W, 80), r.width - 80) + 'px'; t.style.top = (m.t + 10) + 'px'; t.classList.add('on');
     };
     hit.addEventListener('mousemove', move); hit.addEventListener('touchstart', e => move(e.touches[0]), { passive: true });
     hit.addEventListener('mouseleave', () => { cross.setAttribute('opacity', 0); t.classList.remove('on'); });
@@ -440,7 +836,7 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
   // ---------- heatmap ----------
   function heatmap(id, labels, M) {
     const host = document.getElementById(id); host.querySelectorAll('svg').forEach(s => s.remove());
-    const W = Math.min(host.clientWidth || 560, 620), lw = 128, cell = (W - lw) / labels.length, H = lw * 0.2 + cell * labels.length + 8;
+    const W = Math.min(host.clientWidth || 560, 680), lw = Math.min(140, W * 0.3), cell = (W - lw) / labels.length, H = cell * labels.length + 8;
     const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Корреляция средних сумм по сегментам' }, host);
     svg.style.maxWidth = W + 'px';
     const lo = css('--seq-lo'), hi = css('--seq-hi');
@@ -448,13 +844,37 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     labels.forEach((lab, i) => {
       const t = el('text', { x: lw - 8, y: 4 + cell * i + cell / 2 + 4, 'text-anchor': 'end', 'font-size': 11, fill: css('--ink-2') }, svg); t.textContent = lab;
       labels.forEach((lab2, j) => {
-        const v = M[i][j], tt = Math.max(0, Math.min(1, (v - 0.5) / 0.5));
-        const r = el('rect', { x: lw + cell * j + 1, y: 4 + cell * i + 1, width: cell - 2, height: cell - 2, rx: 3, fill: mix(lo, hi, tt) }, svg);
-        const txt = el('text', { x: lw + cell * j + cell / 2, y: 4 + cell * i + cell / 2 + 4, 'text-anchor': 'middle', 'font-size': 11, fill: tt > 0.55 ? (css('--surface') === '#1a1a19' ? '#0b0b0b' : '#ffffff') : css('--ink') }, svg);
+        const v = M[i][j], tt = Math.max(0, Math.min(1, (v - 0.5) / 0.5)), dl = `transition-delay:${(i + j) * 45}ms`;
+        const r = el('rect', { x: lw + cell * j + 1.5, y: 4 + cell * i + 1.5, width: cell - 3, height: cell - 3, rx: 6, fill: mix(lo, hi, tt), class: 'hc', style: dl }, svg);
+        const txt = el('text', { x: lw + cell * j + cell / 2, y: 4 + cell * i + cell / 2 + 4, 'text-anchor': 'middle', 'font-size': 11, fill: tt > 0.55 ? (isDark() ? '#0b0b0b' : '#ffffff') : css('--ink'), class: 'hc', style: dl }, svg);
         txt.textContent = v.toFixed(2);
         bindTip(host, r, `${lab} × ${lab2}: ${v.toFixed(2)}`);
       });
     });
+  }
+
+  // ---------- A/B floor schematic ----------
+  function schema(id) {
+    const host = document.getElementById(id); host.querySelectorAll('svg').forEach(s => s.remove());
+    const W = host.clientWidth || 700, H = 260, ax = H - 46, l = 16, r = 16, iw = W - l - r;
+    const svg = el('svg', { viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'Схема классовых минимумов' }, host);
+    const xa = l + iw * 0.14, xb = l + iw * 0.42, mono = 'ui-monospace, SFMono-Regular, Menlo, monospace';
+    el('rect', { x: xa, y: 26, width: xb - xa, height: ax - 26, rx: 8, fill: css('--s1-wash'), class: 'sc-zone' }, svg);
+    const narrow = W < 520;
+    const zt = el('text', { x: (xa + xb) / 2, y: 46, 'text-anchor': 'middle', 'font-size': narrow ? 10 : 11, 'font-weight': 700, 'letter-spacing': narrow ? '0.04em' : '0.12em', fill: css('--s1'), 'font-family': mono, class: 'sc-zone' }, svg);
+    zt.textContent = narrow ? 'ТОЛЬКО A' : 'ЗДЕСЬ ТОЛЬКО КЛАСС A';
+    el('line', { x1: l, x2: W - r, y1: ax, y2: ax, stroke: css('--axis'), 'stroke-width': 1.5 }, svg);
+    const at = el('text', { x: W - r, y: ax + 36, 'text-anchor': 'end', 'font-size': 11, fill: css('--muted'), 'font-family': mono }, svg); at.textContent = 'ИНДЕКС СУММЫ →';
+    [[xa, narrow ? 'мин. A' : 'минимум A', '--s1', 'end', -4], [xb, narrow ? 'мин. B' : 'минимум B', '--s2', 'start', 4]].forEach(([x, lab, c, anchor, dx]) => {
+      el('line', { x1: x, x2: x, y1: 22, y2: ax + 6, stroke: css(c), 'stroke-width': 1.5, 'stroke-dasharray': '4 4' }, svg);
+      const t = el('text', { x: narrow ? x + dx : x, y: ax + 20, 'text-anchor': narrow ? anchor : 'middle', 'font-size': 12, 'font-weight': 600, fill: css(c) }, svg); t.textContent = lab;
+    });
+    const R = rng(11), gauss = () => { let u = 0, v = 0; while (!u) u = R(); while (!v) v = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+    const dots = [];
+    const pile = (x0, c, n) => { for (let i = 0; i < n; i++) dots.push({ x: x0 + 4 + R() * 14, y: ax - 6 - Math.pow(R(), 0.9) * (ax - 80), c }); };
+    const tail = (x0, c, n) => { for (let i = 0; i < n; i++) dots.push({ x: Math.min(W - r - 6, x0 + 26 + Math.abs(gauss()) * (W - r - x0) * 0.32), y: ax - 6 - R() * 60, c }); };
+    pile(xa, '--s1', 30); tail(xa, '--s1', 30); pile(xb, '--s2', 24); tail(xb, '--s2', 22);
+    dots.forEach(p => el('circle', { cx: p.x.toFixed(1), cy: p.y.toFixed(1), r: 4.2, fill: css(p.c), class: 'sc-dot', style: `--dy:${-(p.y + 30).toFixed(0)}px;--d:${Math.round(150 + R() * 1100)}ms` }, svg));
   }
 
   function table(id, head, rows) {
@@ -462,18 +882,22 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     h.innerHTML = '<table><thead><tr>' + head.map(c => `<th class="${c.num ? 'num' : ''}">${c.t}</th>`).join('') + '</tr></thead><tbody>' +
       rows.map(r => '<tr>' + r.map((v, i) => `<td class="${head[i].num ? 'num' : ''}">${v}</td>`).join('') + '</tr>').join('') + '</tbody></table>';
   }
+  const tiles = rows => rows.map(([l, v, s]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join('');
 
-  // ---------- static tables & tiles ----------
-  const K = D.kpi;
-  document.getElementById('kpis').innerHTML = [
+  // ---------- static content ----------
+  document.getElementById('kpis').innerHTML = tiles([
     ['Алертов в train', nf.format(K.n_train), 'с меткой эскалации'],
     ['Алертов в test', nf.format(K.n_test), 'скрытые метки'],
     ['Транзакций', (K.n_tx / 1e6).toFixed(1).replace('.', ',') + ' млн', 'train + test'],
     ['Медиана на алерт', nf.format(K.tx_med), 'транзакций за 180 дней'],
     ['Доля эскалаций', pct(K.rate), nf.format(K.pos) + ' алертов'],
-  ].map(([l, v, s]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join('');
+  ]);
   document.getElementById('t-rate').textContent = pct(K.rate);
   document.getElementById('t-burst').textContent = pct(D.burst_share);
+  document.getElementById('sl-a').textContent = pct(dt.rateA);
+  document.getElementById('sl-b').textContent = pct(dt.rateB);
+  document.getElementById('kpi-tx').dataset.count = (K.n_tx / 1e6).toFixed(1);
+  document.getElementById('kpi-det').dataset.count = dt.nA + dt.nB;
   table('t-seg', [{ t: 'Сегмент' }, { t: 'Транзакций', num: 1 }, { t: 'Доля', num: 1 }, { t: 'Средний индекс', num: 1 }, { t: 'Std', num: 1 }],
     D.segs.map(s => [s.seg, nf.format(s.n), pct(s.share, 2), fmt(s.mean), fmt(s.std)]));
   table('t-monthly', [{ t: 'Месяц' }, { t: 'Алертов', num: 1 }, { t: 'Доля эскалаций', num: 1 }], D.monthly.map(r => [r.m, r.n, pct(r.rate)]));
@@ -483,23 +907,29 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     D.class_floor.map(r => [r.seg, '+' + r.A.toFixed(3), '+' + r.B.toFixed(3)]));
   table('t-lat', [{ t: 'Группа' }, { t: 'Средняя P(B)', num: 1 }, { t: 'Доля эскалаций', num: 1 }, { t: 'Алертов', num: 1 }],
     D.lat_curve.map((r, i) => [i + 1, fmt(r.p), pct(r.rate), r.n]));
-  const dt = D.det;
-  document.getElementById('det-tiles').innerHTML = [
+  document.getElementById('det-tiles').innerHTML = tiles([
     ['Класс A по правилу', nf.format(dt.nA), 'эскалаций ' + pct(dt.rateA)],
     ['Класс B по правилу', nf.format(dt.nB), 'эскалаций ' + pct(dt.rateB)],
     ['Противоречий', String(dt.conf), 'улики A и B сразу'],
     ['Не определён', nf.format(dt.nU), 'эскалаций ' + pct(dt.rateU)],
-  ].map(([l, v, s]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="sub">${s}</div></div>`).join('');
+  ]);
+  const lo = 0.62, hi = 0.67, last = D.progress.length - 1;
+  document.getElementById('rev').innerHTML = D.progress.map((r, i) =>
+    `<li class="${i === last ? 'best' : ''}"><span class="rn">${i + 1}</span><span class="rk">${r.k}</span>` +
+    `<span class="rbar"><i style="--w:${((r.v - lo) / (hi - lo) * 100).toFixed(1)}%;transition-delay:${i * 120}ms"></i></span><span class="rv">${r.v.toFixed(4)}</span></li>`).join('');
+  const initials = n => n.split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+  document.getElementById('team-grid').innerHTML = TEAM.map(p =>
+    `<div class="card reveal"><div class="ava">${initials(p.name)}</div><h4>${p.name}</h4><div class="role">${p.role}</div><ul>${p.did.map(d => `<li>${d}</li>`).join('')}</ul></div>`).join('');
 
   // ---------- charts ----------
   function renderAll() {
     hbars('c-seg-share', D.segs.map(s => ({ k: s.seg, v: s.share })), { vfmt: v => pct(v), aria: 'Доля транзакций по сегментам', labelW: 128 });
-    hbars('c-seg-mean', D.segs.map(s => ({ k: s.seg, v: s.mean })), { vfmt: v => v.toFixed(2), aria: 'Средний индекс суммы', labelW: 128, lo: -0.8, hi: 2.4 });
+    hbars('c-seg-mean', D.segs.map(s => ({ k: s.seg, v: s.mean, color: s.mean < 0 ? '--s2' : '--s1' })), { vfmt: v => v.toFixed(2), aria: 'Средний индекс суммы', labelW: 128, lo: -0.8, hi: 2.4 });
     columns('c-monthly', D.monthly, { keys: ['rate'], ymax: 0.25, yfmt: v => Math.round(v * 100) + '%', ref: K.rate, refLabel: 'в среднем ' + pct(K.rate),
       tip: r => `${r.m}: <b>${pct(r.rate)}</b> · ${r.n} алертов`, xlab: (r, i) => (i % 3 === 0 ? r.m.slice(2) : ''), aria: 'Доля эскалаций по месяцам' });
     columns('c-daily', D.daily.filter(r => r.d > 0), { keys: ['n'], pad: 0.5, yfmt: v => (v / 1000) + 'k', tip: r => `${r.d} дн. до сигнала: <b>${nf.format(r.n)}</b>`,
       xlab: (r, i) => (r.d % 30 === 0 ? r.d : ''), aria: 'Транзакции по дням до сигнала' });
-    columns('c-burst', D.burst, { keys: ['n'], pad: 1, yfmt: v => (v / 1000) + 'k', tip: r => `${r.s}–${r.s + 10} с до сигнала: <b>${nf.format(r.n)}</b>`,
+    columns('c-burst', D.burst, { keys: ['n'], pad: 1, colors: ['--s2'], yfmt: v => (v / 1000) + 'k', tip: r => `${r.s}–${r.s + 10} с до сигнала: <b>${nf.format(r.n)}</b>`,
       xlab: (r, i) => (r.s % 60 === 0 ? r.s + 'с' : ''), aria: 'Транзакции в последние 10 минут' });
     columns('c-hour', D.hour, { keys: ['p'], h: 180, yfmt: v => Math.round(v * 100) + '%', tip: r => `${r.h}:00: <b>${pct(r.p)}</b>`, xlab: r => (r.h % 3 === 0 ? r.h : ''), aria: 'По часу суток' });
     const ratio = D.amt_hist.filter(r => r.x > -2.7 && r.x < 4.1).map(r => Object.assign({ r: r.p1 / r.p0 }, r));
@@ -509,20 +939,137 @@ text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
     columns('c-segmed', D.seg_med_by_y, { keys: ['m0', 'm1'], ymin: -0.8, ymax: 0.9, h: 230, pad: 20, yfmt: v => v.toFixed(1),
       tip: r => `${r.seg}: отклонён <b>${fmt(r.m0)}</b> · эскалирован <b>${fmt(r.m1)}</b>`, xlab: r => r.seg.replace('bank_otkazmasi', 'bank').replace('_', '\n'), allLabels: true, xlabelH: 42, aria: 'Медианы по сегментам' });
     heatmap('c-corr', D.corr.labels, D.corr.m);
+    schema('c-schema');
     columns('c-floor', D.floor_bank_in, { keys: ['A', 'B'], pad: 2, yfmt: v => nf.format(v), tip: r => `+${r.x.toFixed(3)}: класс A <b>${r.A}</b> · класс B <b>${r.B}</b>`,
       xlab: (r, i) => (i % 4 === 0 ? '+' + r.x.toFixed(2) : ''), aria: 'Транзакции у порога по классам' });
-    columns('c-floor-rate', D.floor_bank_in, { keys: ['rate'], ymax: 0.4, h: 180, pad: 2, yfmt: v => Math.round(v * 100) + '%', ref: K.rate, refLabel: 'средняя ' + pct(K.rate),
+    columns('c-floor-rate', D.floor_bank_in, { keys: ['rate'], ymax: 0.4, pad: 2, colors: ['--vi'], yfmt: v => Math.round(v * 100) + '%', ref: K.rate, refLabel: 'средняя ' + pct(K.rate),
       tip: r => `+${r.x.toFixed(3)}: <b>${r.rate == null ? '—' : pct(r.rate)}</b> · ${r.n} транзакций`, xlab: (r, i) => (i % 4 === 0 ? '+' + r.x.toFixed(2) : ''), aria: 'Доля эскалаций у порога' });
     lines('c-lat', D.lat_curve.map((r, i) => Object.assign({ i: i + 1 }, r)), { x: 'i', keys: ['rate'], dots: true, ymax: 0.36, xmin: 1, xmax: 20, xticks: [1, 5, 10, 15, 20],
       yfmt: v => Math.round(v * 100) + '%', xfmt: v => v, refs: [{ v: dt.rateA, label: 'класс A ' + pct(dt.rateA) }, { v: dt.rateB, label: 'класс B ' + pct(dt.rateB) }],
       tip: r => `группа ${r.i}: P(B)≈${fmt(r.p, 2)} · эскалаций <b>${pct(r.rate)}</b>`, aria: 'Эскалации по вероятности класса B' });
-    hbars('c-progress', D.progress.map(r => ({ k: r.k, v: r.v })), { lo: 0.62, hi: 0.67, base: 0.62, vfmt: v => v.toFixed(4), labelW: 196, rowH: 30, aria: 'Рост CV AUC' });
-    hbars('c-ablation', D.ablation.map(r => ({ k: r.k, v: r.v })), { lo: 0.60, hi: 0.66, base: 0.60, vfmt: v => v.toFixed(4), labelW: 120, rowH: 30, aria: 'Ablation' });
-    hbars('c-models', D.models.map(r => ({ k: r.k, v: r.v })), { lo: 0.63, hi: 0.667, base: 0.63, vfmt: v => v.toFixed(4), labelW: 170, rowH: 30, aria: 'Сравнение моделей' });
-    hbars('c-imp', D.imp.map(r => ({ k: r.k, v: r.v })), { lo: 0, vfmt: v => pct(v), labelW: 190, rowH: 22, aria: 'Важность признаков' });
+    hbars('c-ablation', D.ablation.map(r => ({ k: r.k, v: r.v, color: r.v < 0.65 ? '--s2' : '--s1' })), { lo: 0.60, hi: 0.66, base: 0.60, vfmt: v => v.toFixed(4), labelW: 130, rowH: 30, aria: 'Ablation' });
+    hbars('c-models', D.models.map((r, i) => ({ k: r.k, v: r.v, color: i === 0 ? '--vi' : '--s1' })), { lo: 0.63, hi: 0.667, base: 0.63, vfmt: v => v.toFixed(4), labelW: 175, rowH: 30, aria: 'Сравнение моделей' });
+    hbars('c-imp', D.imp.map(r => ({ k: r.k, v: r.v, color: r.k.startsWith('lat') ? '--s2' : '--s1' })), { lo: 0, vfmt: v => pct(v), labelW: 260, rowH: 24, aria: 'Важность признаков' });
   }
   renderAll();
-  let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(renderAll, 120); });
+  let rt, lastW = innerWidth;
+  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (Math.abs(innerWidth - lastW) > 4) { lastW = innerWidth; renderAll(); } }, 150); });
+
+  // ---------- count-up ----------
+  function countFmt(n, v) {
+    const dec = +(n.dataset.dec || 0);
+    let s = dec ? v.toFixed(dec) : nf.format(Math.round(v));
+    if (n.dataset.comma) s = s.replace('.', ',');
+    return s + (n.dataset.suffix || '');
+  }
+  function countUp(n) {
+    const to = +n.dataset.count;
+    if (reduce) { n.textContent = countFmt(n, to); return; }
+    const t0 = performance.now(), dur = 1600;
+    const tick = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 4); n.textContent = countFmt(n, to * e); if (k < 1) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+  }
+  const counters = [...document.querySelectorAll('[data-count]')];
+  if (!reduce) counters.forEach(n => { n.textContent = countFmt(n, 0); });
+
+  // ---------- reveal on scroll ----------
+  const targets = document.querySelectorAll('.reveal, .chart, .pipe, .rev, [data-count]');
+  if (reduce || !('IntersectionObserver' in window)) {
+    targets.forEach(n => n.classList.add('in')); counters.forEach(countUp);
+  } else {
+    document.querySelectorAll('.pipe .step, .feat .card, .deb .card, .concl li, .team .card, .deliv .dl, .kpis').forEach(n => {
+      const i = [...n.parentElement.children].indexOf(n); n.style.transitionDelay = (i * 80) + 'ms';
+    });
+    const io = new IntersectionObserver(es => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      e.target.classList.add('in');
+      if (e.target.dataset.count != null) countUp(e.target);
+      io.unobserve(e.target);
+    }), { threshold: 0.15, rootMargin: '0px 0px -6% 0px' });
+    targets.forEach(n => io.observe(n));
+  }
+
+  // ---------- nav: progress, scrollspy ----------
+  const bar = document.getElementById('progress'), nav = document.querySelector('.topnav');
+  let ticking = false;
+  const onScroll = () => {
+    const h = document.documentElement, p = h.scrollTop / Math.max(1, h.scrollHeight - h.clientHeight);
+    bar.style.transform = `scaleX(${p})`; nav.classList.toggle('scrolled', h.scrollTop > 10); ticking = false;
+  };
+  addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(onScroll); } }, { passive: true });
+  onScroll();
+  const links = [...document.querySelectorAll('.nav-links a')];
+  const byId = new Map(links.map(a => [a.getAttribute('href').slice(1), a]));
+  if ('IntersectionObserver' in window) {
+    const spy = new IntersectionObserver(es => es.forEach(e => {
+      if (!e.isIntersecting) return;
+      const a = byId.get(e.target.id);
+      links.forEach(x => x.classList.toggle('active', x === a));
+      if (a) { const nl = a.parentElement; nl.scrollTo({ left: a.offsetLeft - nl.clientWidth / 2 + a.clientWidth / 2, behavior: reduce ? 'auto' : 'smooth' }); }
+    }), { rootMargin: '-45% 0px -50% 0px' });
+    document.querySelectorAll('main section[id]').forEach(s => spy.observe(s));
+  }
+
+  // ---------- hero particles ----------
+  const cv = document.getElementById('particles');
+  let COL = {};
+  function hex(c) { c = c.replace('#', ''); return [0, 2, 4].map(i => parseInt(c.slice(i, i + 2), 16)); }
+  function refreshColors() { COL = { a: hex(css('--s1')), b: hex(css('--s2')), n: isDark() ? [150, 156, 172] : [120, 120, 118], txt: css('--muted'), dark: isDark() }; }
+  refreshColors();
+  if (cv && !reduce) {
+    const ctx = cv.getContext('2d');
+    let W = 0, H = 0, P = [], vis = true, raf = 0;
+    const R = rng(3);
+    const size = () => {
+      const dpr = Math.min(2, devicePixelRatio || 1); W = cv.clientWidth; H = cv.clientHeight;
+      cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const n = W < 700 ? 70 : 150;
+      while (P.length < n) P.push(spawn({}, true));
+      P.length = n;
+    };
+    function spawn(p, initial) {
+      p.x = initial ? R() * W : -20 - R() * W * 0.3;
+      p.y0 = H * (0.3 + R() * 0.45);
+      p.v = 0.35 + R() * 0.9; p.c = R() < 0.4 ? 1 : 0; p.r = 1 + R() * 1.9; p.ph = R() * 6.28; p.off = (R() - 0.5) * 2;
+      return p;
+    }
+    const mixc = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+    function frame(t) {
+      raf = 0;
+      if (!vis || document.hidden) return;
+      ctx.clearRect(0, 0, W, H);
+      const split = W * 0.5, span = W * 0.22, yA = H * 0.3, yB = H * 0.74;
+      ctx.save(); ctx.setLineDash([3, 6]); ctx.strokeStyle = COL.dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)';
+      ctx.beginPath(); ctx.moveTo(split, H * 0.16); ctx.lineTo(split, H * 0.88); ctx.stroke(); ctx.restore();
+      ctx.font = '600 10px ui-monospace, Menlo, monospace'; ctx.fillStyle = COL.txt;
+      if (W > 760) {
+        ctx.fillText('ПОРОГ // МИНИМУМ СУММЫ', split + 8, H * 0.18);
+        ctx.fillText('КЛАСС A · ~10% ЭСКАЛАЦИЙ', W - 200, yA - 20);
+        ctx.fillText('КЛАСС B · ~30% ЭСКАЛАЦИЙ', W - 200, yB + 30);
+      }
+      ctx.globalCompositeOperation = COL.dark ? 'lighter' : 'source-over';
+      for (const p of P) {
+        p.x += p.v;
+        let k = Math.max(0, Math.min(1, (p.x - split) / span)); k = k * k * (3 - 2 * k);
+        const lane = (p.c ? yB : yA) + p.off * H * 0.06;
+        const y = p.y0 + (lane - p.y0) * k + Math.sin(t * 0.0012 + p.ph) * 7 * (1 - k);
+        const c = mixc(COL.n, p.c ? COL.b : COL.a, k);
+        const alpha = (p.x < W * 0.45 ? 0.22 : 0.3) + 0.55 * k;
+        ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${alpha * 0.45})`; ctx.lineWidth = p.r;
+        ctx.beginPath(); ctx.moveTo(p.x - p.v * 12, y); ctx.lineTo(p.x, y); ctx.stroke();
+        ctx.fillStyle = `rgba(${c[0]},${c[1]},${c[2]},${alpha})`;
+        ctx.beginPath(); ctx.arc(p.x, y, p.r, 0, 6.2832); ctx.fill();
+        if (p.x > W + 20) spawn(p, false);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      raf = requestAnimationFrame(frame);
+    }
+    const start = () => { if (!raf && vis && !document.hidden) raf = requestAnimationFrame(frame); };
+    size(); start();
+    addEventListener('resize', () => { size(); });
+    document.addEventListener('visibilitychange', start);
+    if ('IntersectionObserver' in window) new IntersectionObserver(es => { vis = es[0].isIntersecting; start(); }).observe(document.querySelector('.hero'));
+  }
 })();
 </script>
 </body>
