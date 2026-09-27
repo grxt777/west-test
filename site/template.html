@@ -120,7 +120,7 @@ main section { padding-top: 104px; scroll-margin-top: 50px; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .grid2 > .card, .grid3 > .card { margin: 0; }
-.grid2 + .grid2, .card + .grid2, .grid2 + .card { margin-top: 18px; }
+.grid2 + .grid2, .card + .grid2, .grid2 + .card, .resgrid + .grid2, .resgrid + .card, .grid2 + .resgrid { margin-top: 18px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 22px 0; }
 .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
 .tile .label { color: var(--ink-2); font-size: 13px; }
@@ -227,7 +227,7 @@ ul.clean li { margin: 7px 0; }
 .rev li.best .rn { background: var(--grad); color: #fff; }
 .rev li.best .rk { color: var(--ink); font-weight: 600; }
 .bigscore { display: flex; flex-direction: column; justify-content: space-between; gap: 14px; }
-.bigscore .big { font-size: clamp(56px, 8vw, 92px); font-weight: 750; letter-spacing: -0.04em; line-height: 1; }
+.bigscore .big { font-size: clamp(56px, 8vw, 92px); font-weight: 750; letter-spacing: -0.015em; line-height: 1; font-variant-numeric: tabular-nums; }
 .bigscore .cap { color: var(--ink-2); font-size: 14px; margin: 0; }
 
 /* debrief */
@@ -241,8 +241,8 @@ ul.clean li { margin: 7px 0; }
 
 /* conclusion */
 .concl { list-style: none; padding: 0; margin: 10px 0 0; counter-reset: c; }
-.concl li { counter-increment: c; display: grid; grid-template-columns: 56px 1fr; gap: 14px; padding: 18px 0; border-bottom: 1px solid var(--grid); color: var(--ink-2); font-size: 16.5px; max-width: 900px; }
-.concl li::before { content: "0" counter(c); font: 700 14px var(--mono); color: var(--s1); padding-top: 3px; }
+.concl li { counter-increment: c; position: relative; padding: 18px 0 18px 70px; border-bottom: 1px solid var(--grid); color: var(--ink-2); font-size: 16.5px; line-height: 1.6; max-width: 900px; }
+.concl li::before { content: "0" counter(c); position: absolute; left: 0; top: 21px; font: 700 14px var(--mono); color: var(--s1); }
 
 /* team + deliverables */
 .team .card { margin: 0; }
@@ -290,7 +290,7 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
   .finding { padding: 32px 16px 18px !important; }
   .rev li { grid-template-columns: 28px 1fr 58px; }
   .rev .rbar { grid-column: 2 / 4; grid-row: 2; }
-  .concl li { grid-template-columns: 40px 1fr; font-size: 15.5px; }
+  .concl li { padding-left: 44px; font-size: 15.5px; }
   main section { padding-top: 80px; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -616,7 +616,7 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
     <h2>Главное в пяти пунктах.</h2>
   </div>
   <ol class="concl">
-    <li class="reveal">Почти весь сигнал модели даёт <b>скрытый класс клиента</b>: одна вероятность класса даёт AUC 0.654 из итоговых 0.664. Эскалаций у класса A ≈ 10%, у B ≈ 30%.</li>
+    <li class="reveal">Почти весь сигнал модели даёт <b>скрытый класс клиента</b>: одна вероятность класса даёт AUC 0.654 из итоговых 0.664. Эскалаций у класса A&nbsp;≈&nbsp;10%, у B&nbsp;≈&nbsp;30%.</li>
     <li class="reveal">Класс выдают <b>классовые минимумы сумм</b>: одна операция у порога однозначно определяет класс у 6 045 клиентов, противоречий ноль.</li>
     <li class="reveal">У остальных клиентов класс восстанавливается по форме профиля (разбросы и разности уровней между сегментами) с AUC 0.955, без использования таргета.</li>
     <li class="reveal">Абсолютные суммы, ритм активности и «всплеск» перед сигналом почти ничего не добавляют сверх класса. Важен <b>профиль относительно самого клиента</b>.</li>
