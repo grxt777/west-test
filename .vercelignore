@@ -1,0 +1,9 @@
+# на Vercel нужен только статический сайт из docs/
+fintech_data/
+cache/
+src/
+site/
+catboost_info/
+*.ipynb
+*.csv
+*.parquet

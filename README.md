@@ -9,9 +9,23 @@
 |---|---|---|
 | Предсказания | `team_F2F427DD.csv` | готово, формат проверен |
 | Ноутбук | `solution.ipynb` (+ `requirements.txt`) | готово, 3 прогона дали побайтово одинаковый CSV |
-| EDA-сайт | `docs/index.html` (копия `site/index.html`, один самодостаточный файл) | готово |
+| EDA-сайт | `docs/index.html` → деплой на Vercel (`vercel.json`) | готово |
 
 Ноутбук (*Restart & Run All*, ≈3 минуты) создаёт `team_F2F427DD.csv`; три независимых прогона дали побайтово одинаковый файл.
+
+## Метрики (out-of-fold, stratified 5-fold × 3 повтора, 14 000 train-алертов)
+
+| Модель | ROC-AUC | разброс по повторам | мин / макс по фолдам | PR-AUC |
+|---|---|---|---|---|
+| LightGBM | 0.6641 | ±0.0008 | 0.642 / 0.691 | 0.272 |
+| CatBoost | 0.6642 | ±0.0002 | 0.638 / 0.689 | 0.272 |
+| XGBoost | 0.6631 | ±0.0008 | 0.634 / 0.691 | 0.271 |
+| **Бленд (финал): среднее рангов трёх моделей** | **0.6643** | ±0.0004 | 0.638 / 0.690 | 0.272 |
+
+Ориентиры: случайный прогноз даёт ROC-AUC 0.5 и PR-AUC 0.172 (доля эскалаций).
+Если помечать 17% самых рискованных алертов, precision и recall равны 0.31 (у случайного отбора 0.17).
+Доля эскалаций по децилям прогноза растёт от 8.7% до 31.4%. Accuracy здесь неинформативна:
+константа «все 0» даёт 0.828.
 
 ## Главная находка
 
@@ -24,12 +38,13 @@
 ## Структура
 
 ```
-fintech_data/          исходные данные (не в репозитории: положить локально)
+fintech_data/          исходные данные организаторов
 solution.ipynb         финальное воспроизводимое решение (самодостаточный)
 build_notebook.py      генерирует solution.ipynb (единый источник кода)
 requirements.txt       точные версии библиотек
 team_F2F427DD.csv      сабмит
-docs/index.html        EDA-сайт для GitHub Pages
+docs/index.html        EDA-сайт (деплоится на Vercel)
+vercel.json            конфиг Vercel: публикуется только docs/
 site/index.html        EDA-сайт; template.html + data.json -> build.py
 src/                   исследовательский код: data, features, latent, models, cv, site_data
 cache/                 кэш для src/ (создаётся локально, не в репозитории)
@@ -43,30 +58,22 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/jupyter nbconvert --to notebook --execute solution.ipynb --output solution.ipynb
 ```
 
-Для локального запуска данные должны лежать рядом с проектом в `fintech_data/`.
-Если файл уже лежит в `~/Downloads/fintech_data`, удобно сделать символическую ссылку:
+Данные уже лежат в `fintech_data/` рядом с ноутбуком: после `git clone` ноутбук запускается сразу.
+
+Предпросмотр сайта локально (из корня репозитория):
 
 ```bash
-ln -s ~/Downloads/fintech_data ./fintech_data
-```
-
-Для предварительного просмотра сайта из корня проекта:
-
-```bash
-cd /Users/kaxramonjonusmonov/west-test
 python3 -m http.server 8000
 ```
 
-После этого открыть `http://localhost:8000/docs/` или `http://localhost:8000/docs/index.html`.
+После этого открыть `http://localhost:8000/docs/`.
 
-## Публикация сайта (GitHub Pages)
+## Деплой сайта (Vercel)
 
-**Settings → Pages** → Source: *Deploy from a branch*, Branch: `main`, папка `/docs` → Save.
-Через 1–2 минуты сайт будет доступен по адресу `https://grxt777.github.io/west-test/`.
-Проверить в режиме инкогнито: он должен открываться без логина. Для приватного репозитория Pages
-на бесплатном плане недоступен, поэтому репозиторий нужно сделать публичным.
+`vercel.json` публикует только `docs/`, так что данные, CSV и ноутбук на сайт не попадают.
 
-Альтернатива: Netlify (app.netlify.com → Add new site → Deploy manually → перетащить папку `site`).
-Нужен аккаунт, иначе сайт удалится.
+- **Через GitHub:** vercel.com/new → Import `grxt777/west-test` → Framework Preset: *Other* → Deploy.
+  Vercel сам прочитает `vercel.json`; приватный репозиторий на плане Hobby поддерживается. Сайт публичный.
+- **Через CLI:** `npx vercel login`, затем `npx vercel deploy --prod` из корня проекта.
 
-Сырые данные в публичный репозиторий **не выкладывать**: в `index.html` только агрегаты для графиков.
+Проверить ссылку в режиме инкогнито: сайт должен открываться без логина.
