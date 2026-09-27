@@ -7,3 +7,5 @@ __pycache__/
 *.pyc
 baseline_features.py
 ТЗ.md
+.vercel
+.env*

@@ -9,7 +9,7 @@
 |---|---|---|
 | Предсказания | `team_F2F427DD.csv` | готово, формат проверен |
 | Ноутбук | `solution.ipynb` (+ `requirements.txt`) | готово, 3 прогона дали побайтово одинаковый CSV |
-| EDA-сайт | `docs/index.html` → деплой на Vercel (`vercel.json`) | готово |
+| EDA-сайт | **https://west-test.vercel.app** (исходник `docs/index.html`) | опубликован на Vercel |
 
 Ноутбук (*Restart & Run All*, ≈3 минуты) создаёт `team_F2F427DD.csv`; три независимых прогона дали побайтово одинаковый файл.
 
@@ -69,6 +69,8 @@ python3 -m http.server 8000
 После этого открыть `http://localhost:8000/docs/`.
 
 ## Деплой сайта (Vercel)
+
+Сайт: **https://west-test.vercel.app** (открывается без логина).
 
 `vercel.json` публикует только `docs/`, так что данные, CSV и ноутбук на сайт не попадают.
 
