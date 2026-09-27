@@ -162,11 +162,11 @@ main section { padding-top: 104px; scroll-margin-top: 50px; }
 .step h4 { margin: 8px 0 2px; font-size: 15px; letter-spacing: -0.01em; }
 .step .sub { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
 .step .more { margin: 12px 0 4px; }
-.morebody { display: none; font-size: 13px; line-height: 1.5; margin: 8px 0 2px; color: var(--ink-2); }
+.morebody { display: none; font-size: 13px; line-height: 1.5; margin: 10px 0 2px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--ink-2); }
 .step.pop .morebody { display: block; animation: fadeUp .35s var(--ease) both; }
 .step.rule { --acc: var(--s1); --acc-wash: var(--s1-wash); }
 .step.learn { --acc: var(--s2); --acc-wash: var(--s2-wash); }
-.step.pop { z-index: 6; }
+.step.pop { border-color: var(--acc, var(--border-2)); box-shadow: 0 20px 50px -34px var(--glow); }
 
 details { margin: 6px 0 10px; font-size: 13px; color: var(--ink-2); }
 details summary, .morebtn { cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px 6px 13px; border-radius: 999px;
@@ -181,15 +181,10 @@ details[open] > *:not(summary) { animation: fadeUp .35s var(--ease) both; }
 @media (min-width: 1001px) {
   .step { display: flex; flex-direction: column; }
   .step .tag { align-self: flex-start; }
-  .step .more { margin-top: auto; padding-top: 12px; }
+  .pipe { align-items: start; }
+  .step .more { margin-top: var(--more-gap, 0px); padding-top: 12px; }
   .step .morebtn { padding: 5px 10px 5px 11px; font-size: 12.5px; }
-  .morebody, .step.pop .morebody { display: block; position: absolute; top: calc(100% + 8px); left: 0; width: max(100%, 250px); margin: 0; padding: 12px 14px; z-index: 6;
-    background: var(--surface); color: var(--ink-2); border: 1px solid var(--acc, var(--border-2)); border-radius: 12px; box-shadow: 0 24px 50px -20px rgba(0,0,0,.6);
-    visibility: hidden; opacity: 0; transform: translateY(6px); pointer-events: none; animation: none; transition: none; }
-  .step.pop .morebody { visibility: visible; opacity: 1; transform: none; pointer-events: auto; transition: opacity .2s var(--ease), transform .2s var(--ease); }
-  .morebody::before { content: ""; position: absolute; top: -6px; left: 22px; width: 10px; height: 10px; background: var(--surface); border-left: 1px solid var(--acc, var(--border-2)); border-top: 1px solid var(--acc, var(--border-2)); transform: rotate(45deg); }
-  .pipe .step:nth-last-child(-n+2) .morebody { left: auto; right: 0; }
-  .pipe .step:nth-last-child(-n+2) .morebody::before { left: auto; right: 22px; }
+  .step .morebody { font-size: 12.5px; }
 }
 
 table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; font-variant-numeric: tabular-nums; }
@@ -1076,19 +1071,25 @@ footer .mono { font-weight: 600; color: var(--ink-2); }
   const setMenu = open => { nav.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); };
   menuBtn.addEventListener('click', e => { e.stopPropagation(); setMenu(!nav.classList.contains('open')); });
   links.forEach(a => a.addEventListener('click', () => setMenu(false)));
-  const moreBtns = [...document.querySelectorAll('.pipe .morebtn')];
-  const setStep = (btn, open) => { btn.closest('.step').classList.toggle('pop', open); btn.setAttribute('aria-expanded', String(open)); };
-  const closeSteps = () => moreBtns.forEach(b => setStep(b, false));
-  moreBtns.forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.pipe .morebtn').forEach(b => b.addEventListener('click', () => {
     const open = b.getAttribute('aria-expanded') !== 'true';
-    closeSteps();
-    setStep(b, open);
+    b.closest('.step').classList.toggle('pop', open);
+    b.setAttribute('aria-expanded', String(open));
+    b.textContent = open ? 'Свернуть' : 'Подробнее';
   }));
-  document.addEventListener('click', e => {
-    if (!nav.contains(e.target)) setMenu(false);
-    if (!e.target.closest('.pipe .more')) closeSteps();
-  });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { setMenu(false); closeSteps(); } });
+  const pipeMores = [...document.querySelectorAll('.pipe .more')];
+  const alignMores = () => {
+    pipeMores.forEach(m => m.style.setProperty('--more-gap', '0px'));
+    if (!matchMedia('(min-width: 1001px)').matches) return;
+    const tops = pipeMores.map(m => m.offsetTop);
+    const max = Math.max(...tops);
+    pipeMores.forEach((m, i) => m.style.setProperty('--more-gap', (max - tops[i]) + 'px'));
+  };
+  alignMores();
+  addEventListener('resize', alignMores);
+  if (document.fonts) document.fonts.ready.then(alignMores);
+  document.addEventListener('click', e => { if (!nav.contains(e.target)) setMenu(false); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
   if ('IntersectionObserver' in window) {
     const spy = new IntersectionObserver(es => es.forEach(e => {
       if (!e.isIntersecting) return;
