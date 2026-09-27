@@ -161,15 +161,33 @@ main section { padding-top: 104px; scroll-margin-top: 50px; }
 .step.rule .node { border-color: var(--s1); color: var(--s1); }
 .step h4 { margin: 8px 0 2px; font-size: 15px; letter-spacing: -0.01em; }
 .step .sub { color: var(--muted); font-size: 12.5px; line-height: 1.45; }
-.step details { margin-top: 8px; }
-.step details p { font-size: 13px; margin: 6px 0 4px; }
+.step details { margin: 12px 0 4px; }
+.step details p { font-size: 13px; line-height: 1.5; margin: 8px 0 2px; }
+.step.rule { --acc: var(--s1); --acc-wash: var(--s1-wash); }
+.step.learn { --acc: var(--s2); --acc-wash: var(--s2-wash); }
+.step.pop { z-index: 6; }
 
 details { margin: 6px 0 10px; font-size: 13px; color: var(--ink-2); }
-details summary { cursor: pointer; color: var(--muted); font: 500 13px var(--sans); padding: 4px 0; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+details summary { cursor: pointer; list-style: none; user-select: none; display: inline-flex; align-items: center; gap: 7px; padding: 6px 12px 6px 13px; border-radius: 999px;
+  font: 500 13px var(--sans); color: var(--ink); background: var(--surface-2); border: 1px solid var(--border-2); transition: border-color .2s, background .2s, color .2s; }
 details summary::-webkit-details-marker { display: none; }
-details summary::after { content: "+"; font-size: 13px; transition: transform .25s; }
-details[open] summary::after { transform: rotate(45deg); }
+details summary::after { content: ""; width: 6px; height: 6px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .25s var(--ease); }
+details summary:hover { border-color: var(--acc, var(--s1)); color: var(--acc, var(--s1)); }
+details summary:focus-visible { outline: 2px solid var(--acc, var(--s1)); outline-offset: 2px; }
+details[open] summary { color: var(--acc, var(--s1)); border-color: var(--acc, var(--s1)); background: var(--acc-wash, var(--s1-wash)); }
+details[open] summary::after { transform: translateY(1px) rotate(-135deg); }
 details[open] > *:not(summary) { animation: fadeUp .35s var(--ease) both; }
+@media (min-width: 1001px) {
+  .step { display: flex; flex-direction: column; }
+  .step .tag { align-self: flex-start; }
+  .step details { margin-top: auto; padding-top: 12px; }
+  .step details summary { padding: 5px 10px 5px 11px; font-size: 12.5px; }
+  .step details p { position: absolute; top: calc(100% + 8px); left: 0; width: max(100%, 250px); margin: 0; padding: 12px 14px; z-index: 6;
+    background: var(--surface); color: var(--ink-2); border: 1px solid var(--acc, var(--border-2)); border-radius: 12px; box-shadow: 0 24px 50px -20px rgba(0,0,0,.6); }
+  .step details p::before { content: ""; position: absolute; top: -6px; left: 22px; width: 10px; height: 10px; background: var(--surface); border-left: 1px solid var(--acc, var(--border-2)); border-top: 1px solid var(--acc, var(--border-2)); transform: rotate(45deg); }
+  .pipe .step:nth-last-child(-n+2) details p { left: auto; right: 0; }
+  .pipe .step:nth-last-child(-n+2) details p::before { left: auto; right: 22px; }
+}
 
 table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; font-variant-numeric: tabular-nums; }
 th, td { text-align: left; padding: 7px 9px; border-bottom: 1px solid var(--grid); }
@@ -1054,8 +1072,16 @@ footer .mono { font-weight: 600; color: var(--ink-2); }
   const setMenu = open => { nav.classList.toggle('open', open); menuBtn.setAttribute('aria-expanded', String(open)); };
   menuBtn.addEventListener('click', e => { e.stopPropagation(); setMenu(!nav.classList.contains('open')); });
   links.forEach(a => a.addEventListener('click', () => setMenu(false)));
-  document.addEventListener('click', e => { if (!nav.contains(e.target)) setMenu(false); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+  const stepDetails = [...document.querySelectorAll('.pipe details')];
+  stepDetails.forEach(d => d.addEventListener('toggle', () => {
+    d.closest('.step').classList.toggle('pop', d.open);
+    if (d.open) stepDetails.forEach(o => { if (o !== d) o.open = false; });
+  }));
+  document.addEventListener('click', e => {
+    if (!nav.contains(e.target)) setMenu(false);
+    if (!e.target.closest('.pipe details')) stepDetails.forEach(d => { d.open = false; });
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') { setMenu(false); stepDetails.forEach(d => { d.open = false; }); } });
   if ('IntersectionObserver' in window) {
     const spy = new IntersectionObserver(es => es.forEach(e => {
       if (!e.isIntersecting) return;
