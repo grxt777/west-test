@@ -322,7 +322,7 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
   <canvas id="particles" aria-hidden="true"></canvas>
   <div class="hero-inner">
     <p class="eyebrow">Хакатон по финмониторингу <b>//</b> AML-алерты</p>
-    <h1><span class="ln"><span>Эскалация предсказана.</span></span><span class="ln"><span class="grad-text">Скрытый класс найден.</span></span></h1>
+    <h1><span class="ln"><span>Риск эскалации оценён.</span></span><span class="ln"><span class="grad-text">Скрытый класс найден.</span></span></h1>
     <p class="lead">Каждый алерт — сотни транзакций за 180 дней. Мы нашли закономерность генератора данных: у каждого клиента есть скрытый класс A или B, и его выдают самые маленькие суммы операций. На этом построена модель.</p>
     <div class="ctas">
       <a class="btn primary" href="#floors">Главная находка <span class="arr">→</span></a>
@@ -373,7 +373,7 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
   </div>
   <div class="legendtags reveal"><span><span class="tag rule">Правило</span> геометрия сумм, без обучения</span><span><span class="tag learn">Обучение</span> обучаемая модель</span></div>
   <ol class="pipe">
-    <li class="step io reveal"><div class="node">01</div><span class="tag io">Вход</span><h4>Транзакции</h4><div class="sub">180 дней · ~460 на алерт</div>
+    <li class="step io reveal"><div class="node">01</div><span class="tag io">Вход</span><h4>Транзакции</h4><div class="sub">180 дней · медиана 461 на алерт</div>
       <details><summary>Подробнее</summary><p>Train и test вместе: 10 млн операций. Метка эскалации есть только у train.</p></details></li>
     <li class="step rule reveal"><div class="node">02</div><span class="tag rule">Правило</span><h4>8 сегментов</h4><div class="sub">тип × направление</div>
       <details><summary>Подробнее</summary><p>Уровень сумм сильно зависит от типа операции, поэтому все признаки считаются внутри сегментов.</p></details></li>
@@ -386,7 +386,7 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
     <li class="step learn reveal"><div class="node">06</div><span class="tag learn">Обучение</span><h4>GBDT-ансамбль</h4><div class="sub">LightGBM · CatBoost · XGBoost</div>
       <details><summary>Подробнее</summary><p>Одинаковые фолды 5 × 3, 3 seed'а на фолд, фиксированное число итераций.</p></details></li>
     <li class="step io reveal"><div class="node">07</div><span class="tag io">Выход</span><h4>Вероятность</h4><div class="sub">бленд рангов → [0, 1]</div>
-      <details><summary>Подробнее</summary><p>Среднее рангов 135 фолдовых моделей, нормированное в [0, 1].</p></details></li>
+      <details><summary>Подробнее</summary><p>Каждая модель усредняет 45 фолдовых прогнозов, затем берётся среднее рангов трёх моделей, нормированное в [0, 1].</p></details></li>
   </ol>
 </section>
 
@@ -563,7 +563,7 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
         <div class="big grad-text">0.6643</div>
         <p class="cap">Бленд рангов LightGBM, CatBoost и XGBoost. Бейзлайн на обычных агрегатах давал 0.637.</p>
       </div>
-      <div class="callout" style="margin:0"><span class="note-label">ПРОЧИТАЙТЕ ДО ЦИФР</span>Все числа — OOF ROC-AUC на повторной CV, а не на скрытом тесте. На тесте из 6 000 алертов стандартная ошибка AUC около <b>±0.008</b>, поэтому разница в тысячных между моделями — шум. Adversarial AUC train/test = 0.500, так что CV — честная оценка.</div>
+      <div class="callout" style="margin:0"><span class="note-label">ПРОЧИТАЙТЕ ДО ЦИФР</span>Все числа — OOF ROC-AUC на повторной CV, а не на скрытом тесте. На тесте из 6 000 алертов стандартная ошибка AUC около <b>±0.01</b>, поэтому разница в тысячных между моделями — шум. Adversarial AUC train/test = 0.500, так что CV — честная оценка.</div>
     </div>
   </div>
   <div class="grid2">
@@ -583,7 +583,7 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
     <p class="csub">LightGBM на всём train, доля суммарного gain. Два признака скрытого класса дают больше половины.</p>
     <div class="chart" id="c-imp"></div>
   </div>
-  <p class="reveal"><b>Валидация:</b> одинаковые stratified 5-fold × 3 повтора для всех моделей. Число итераций зафиксировано заранее, без ранней остановки на валидационном фолде. Гиперпараметры подобраны через Optuna, и десятки конфигураций сходятся к плато ~0.664, то есть результат устойчив. Тестовый прогноз — среднее рангов 135 фолдовых моделей. Ноутбук воспроизводит сабмит побайтово.</p>
+  <p class="reveal"><b>Валидация:</b> одинаковые stratified 5-fold × 3 повтора для всех моделей. Число итераций зафиксировано заранее, без ранней остановки на валидационном фолде. Гиперпараметры подобраны через Optuna, и десятки конфигураций сходятся к плато ~0.664, то есть результат устойчив. Тестовый прогноз каждой модели — среднее 45 фолдовых моделей (15 фолдов × 3 seed'а), затем среднее рангов трёх моделей, всего 135 моделей. Ноутбук воспроизводит сабмит побайтово.</p>
 </section>
 
 <section id="debrief">
@@ -600,11 +600,11 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
     <div class="card no reveal"><h3><span class="mk">−</span>Что нет</h3><ul>
       <li>Внутри класса сигнал слабый (AUC ≈ 0.515): время, потоки и гистограммы почти ничего не добавляют.</li>
       <li>Ранняя остановка завышала CV (0.6648 против честных 0.6641), поэтому мы от неё отказались.</li>
-      <li>Нейросеть на последовательностях не делали: сигнал в классе клиента, а не в порядке операций.</li>
+      <li>Нейросеть на последовательностях не делали: основной сигнал даёт класс клиента, а при одном сабмите без лидерборда рисковать было нельзя.</li>
     </ul></div>
     <div class="card next reveal"><h3><span class="mk">→</span>Что дальше</h3><ul>
       <li>Нейросеть на последовательностях транзакций как декоррелированный член бленда.</li>
-      <li>Вложенная CV для порогов классов, чтобы оценка была строго честной.</li>
+      <li>Проверить, переносится ли механизм классов на новые данные: пороги найдены для этого генератора.</li>
       <li>Калибровка вероятностей, если модель пойдёт в работу с порогом решения.</li>
     </ul></div>
   </div>
@@ -616,10 +616,10 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
     <h2>Главное в пяти пунктах.</h2>
   </div>
   <ol class="concl">
-    <li class="reveal">Эскалацию почти полностью определяет <b>скрытый класс клиента</b>: A ≈ 10%, B ≈ 30%.</li>
+    <li class="reveal">Почти весь сигнал модели даёт <b>скрытый класс клиента</b>: одна вероятность класса даёт AUC 0.654 из итоговых 0.664. Эскалаций у класса A ≈ 10%, у B ≈ 30%.</li>
     <li class="reveal">Класс выдают <b>классовые минимумы сумм</b>: одна операция у порога однозначно определяет класс у 6 045 клиентов, противоречий ноль.</li>
     <li class="reveal">У остальных клиентов класс восстанавливается по форме профиля (разбросы и разности уровней между сегментами) с AUC 0.955, без использования таргета.</li>
-    <li class="reveal">Абсолютные суммы, ритм активности и «всплеск» перед сигналом почти не различают классы. Важен <b>профиль относительно самого клиента</b>.</li>
+    <li class="reveal">Абсолютные суммы, ритм активности и «всплеск» перед сигналом почти ничего не добавляют сверх класса. Важен <b>профиль относительно самого клиента</b>.</li>
     <li class="reveal">Итог: CV ROC-AUC <b>0.6643</b> против 0.637 у бейзлайна. Остаток сигнала внутри классов слабый, так что результат близок к потолку, который допускают данные.</li>
   </ol>
 </section>
@@ -781,7 +781,7 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
       const yy = m.t + i * rowH, bh = Math.min(18, rowH - 8), by = yy + (rowH - bh) / 2, pos = r.v >= base;
       const lab = el('text', { x: m.l - 8, y: yy + rowH / 2 + 4, 'text-anchor': 'end', 'font-size': 12, fill: css('--ink-2') }, svg);
       const maxc = Math.floor((lw - 12) / 6.6);
-      lab.textContent = r.k.length > maxc ? '…' + r.k.slice(r.k.length - maxc + 1) : r.k;
+      lab.textContent = r.k.length <= maxc ? r.k : o.keepTail ? '…' + r.k.slice(r.k.length - maxc + 1) : r.k.slice(0, maxc - 1) + '…';
       el('path', { d: hbar(x0, by, bh, x(r.v), 4), fill: css(r.color || o.color || '--s1'), class: 'hb' + (pos ? '' : ' neg'), style: `transition-delay:${i * 70}ms` }, svg);
       const vt = el('text', { x: pos ? x(r.v) + 6 : x0 + 6, y: yy + rowH / 2 + 4, 'text-anchor': 'start', 'font-size': 12, fill: css('--ink'), 'font-variant-numeric': 'tabular-nums', class: 'vt', style: `transition-delay:${i * 70 + 500}ms` }, svg);
       vt.textContent = o.vfmt ? o.vfmt(r.v) : r.v;
@@ -949,7 +949,7 @@ footer .mono { font-family: var(--mono); letter-spacing: .1em; }
       tip: r => `группа ${r.i}: P(B)≈${fmt(r.p, 2)} · эскалаций <b>${pct(r.rate)}</b>`, aria: 'Эскалации по вероятности класса B' });
     hbars('c-ablation', D.ablation.map(r => ({ k: r.k, v: r.v, color: r.v < 0.65 ? '--s2' : '--s1' })), { lo: 0.60, hi: 0.66, base: 0.60, vfmt: v => v.toFixed(4), labelW: 130, rowH: 30, aria: 'Ablation' });
     hbars('c-models', D.models.map((r, i) => ({ k: r.k, v: r.v, color: i === 0 ? '--vi' : '--s1' })), { lo: 0.63, hi: 0.667, base: 0.63, vfmt: v => v.toFixed(4), labelW: 175, rowH: 30, aria: 'Сравнение моделей' });
-    hbars('c-imp', D.imp.map(r => ({ k: r.k, v: r.v, color: r.k.startsWith('lat') ? '--s2' : '--s1' })), { lo: 0, vfmt: v => pct(v), labelW: 260, rowH: 24, aria: 'Важность признаков' });
+    hbars('c-imp', D.imp.map(r => ({ k: r.k, v: r.v, color: r.k.startsWith('lat') ? '--s2' : '--s1' })), { lo: 0, vfmt: v => pct(v), labelW: 260, rowH: 24, keepTail: true, aria: 'Важность признаков' });
   }
   renderAll();
   let rt, lastW = innerWidth;
